@@ -38,8 +38,9 @@ We formulate this as a Markov Decision Process (MDP):
 
 - **States**:  
   At time \( t \), the state is
-  
-  $$ s_t = (\mathbf{c}_t, \mathbf{p}_t) $$ 
+  \[
+  s_t = (\mathbf{c}_t, \mathbf{p}_t)
+  \]
   where:
   - \( \mathbf{c}_t \in \{0,1\}^N \) is a binary vector encoding which pages are in the cache:
     \[
