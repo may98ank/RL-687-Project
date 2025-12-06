@@ -5,6 +5,7 @@ import numpy as np
 from torch.distributions import Categorical
 from models import PolicyNetwork
 from env_cache import CacheEnv
+import torch.nn.functional as F
 
 
 def sample_episode(env, policy_net, device, gamma=0.99, verbose=False):
@@ -121,9 +122,31 @@ def compute_returns(rewards, gamma=0.99): # G_t for each time step t
     return returns
 
 def reinforce_update(policy_net,value_net,optimiser_policy,optimiser_value,states,actions,rewards,gamma=0.99,device="cuda"):
+        states_tensor = torch.tensor(states, dtype=torch.float32, device=device)
+        actions_tensor = torch.tensor(actions, dtype=torch.long, device=device)
+        returns = compute_returns(rewards, gamma)
+        returns_tensor = torch.tensor(returns, dtype=torch.float32, device=device)
+        # Compute the Baseline v_w(S_t)
+        values = value_net(states_tensor)
+        advantages = returns_tensor - values.detach()  # advantage A_t = G_t - v_w(S_t) for all steps 
+        
+        # Policy Loss
+        action_logits = policy_net(states_tensor) # no_of_steps x no_of_actions x 1
+        log_probs = torch.log_softmax(action_logits, dim=-1)
+        chosen_log_probs = log_probs(torch.arange(action_logits.shape[1], device=device), actions_tensor)
+        policy_loss = -torch.mean(chosen_log_probs * advantages)
+        optimiser_policy.zero_grad()
+        policy_loss.backward()
+        optimiser_policy.step()
+        
+        # Value Loss
+        value_loss = (advantages*(returns_tensor-values)**2).mean()
+        optimiser_value.zero_grad()
+        value_loss.backward()
+        optimiser_value.step()
 
+        return policy_loss.item(), value_loss.item()
 
-    pass
 # test the sample_episode function
 def test_sample_episode():
     print("="*60)
