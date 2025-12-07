@@ -4,7 +4,9 @@ import torch
 import numpy as np
 from torch.distributions import Categorical
 from models import PolicyNetwork, ValueNetwork
+from models import PolicyNetwork, ValueNetwork
 from env_cache import CacheEnv
+import torch.nn.functional as F
 
 
 def sample_episode(env: CacheEnv, policy_net: PolicyNetwork, device: torch.device, gamma: float = 0.99, verbose: bool = False) -> tuple:
@@ -49,22 +51,25 @@ def sample_episode(env: CacheEnv, policy_net: PolicyNetwork, device: torch.devic
         next_state, reward, done, info = env.step(action.item())
         
         states.append(s_tensor)
-        actions.append(action)
+        actions.append(action) # action is a tensor of shape (1,)
         rewards.append(reward)
         requests.append(current_req)
         hits.append(info["hit"])
-        cache_states.append(sorted(env.cache.copy()))
+        cache_states.append(env.cache.copy())  # Preserve order - slots matter now
         
         if verbose:
             hit_str = "HIT ✓" if info["hit"] else "MISS ✗"
             action_prob = action_dist.probs[action.item()].item()
+            action_val = action.item()
             print(f"\nStep {step}:")
-            print(f"  Cache (before): {sorted(cache_before) if cache_before else '[]'}")
+            print(f"  Cache (before): {cache_before if cache_before else '[]'}")
             print(f"  Request:        Page {current_req}")
-            print(f"  Action:         Evict page {action.item()}")
+            print(f"  Action:         Evict cache slot {action_val}")
+            if cache_before and action_val < len(cache_before):
+                print(f"  Slot {action_val} contains: Page {cache_before[action_val]}")
             print(f"  Result:         {hit_str}")
             print(f"  Reward:         {reward:+d}")
-            print(f"  Cache (after):  {sorted(env.cache) if env.cache else '[]'}")
+            print(f"  Cache (after):  {env.cache if env.cache else '[]'}")
             print(f"  Action prob:    {action_prob:.4f}")
         
         state = next_state
@@ -91,13 +96,14 @@ def sample_episode(env: CacheEnv, policy_net: PolicyNetwork, device: torch.devic
         print(f"  Average reward: {avg_reward:.2f}")
         
         print(f"\n📋 Step-by-step breakdown:")
-        print(f"{'Step':<6} {'Request':<8} {'Action':<8} {'Hit?':<6} {'Reward':<8} {'Cache After'}")
-        print("-" * 70)
+        print(f"{'Step':<6} {'Request':<8} {'Action':<12} {'Hit?':<6} {'Reward':<8} {'Cache After'}")
+        print("-" * 75)
         for i in range(len(rewards)):
             cache_after = cache_states[i] if i < len(cache_states) else []
             hit_str = "✓" if hits[i] else "✗"
             cache_str = str(cache_after) if cache_after else "[]"
-            print(f"{i+1:<6} {requests[i]:<8} {actions[i].item():<8} {hit_str:<6} {rewards[i]:+8} {cache_str}")
+            action_str = f"Slot {actions[i].item()}"
+            print(f"{i+1:<6} {requests[i]:<8} {action_str:<12} {hit_str:<6} {rewards[i]:+8} {cache_str}")
         
         print("\n" + "="*60)
     
@@ -200,8 +206,8 @@ def test_sample_episode():
     print("REINFORCE ALGORITHM TEST")
     print("="*60)
     
-    env = CacheEnv(num_pages=10, cache_size=3, episode_len=10)
-    policy_net = PolicyNetwork(state_dim=20, action_dim=10)
+    env = CacheEnv(num_pages=10, cache_size=3, episode_len=500)
+    policy_net = PolicyNetwork(state_dim=20, action_dim=3)  # action_dim = cache_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     policy_net.to(device)
     
@@ -210,11 +216,12 @@ def test_sample_episode():
     print(f"  - Cache size: {env.cache_size}")
     print(f"  - Episode length: {env.episode_len}")
     print(f"  - State dimension: 20 (2 * num_pages)")
-    print(f"  - Action dimension: 10 (num_pages)")
+    print(f"  - Action dimension: 3 (cache_size - cache slots 0 to {env.cache_size-1})")
     print(f"  - Device: {device}")
     print(f"  - Number of episodes: 100")
     
     # Run 100 episodes and collect statistics
+    num_episodes = 100
     num_episodes = 100
     all_stats = []
     

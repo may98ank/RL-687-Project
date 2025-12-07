@@ -53,28 +53,30 @@ class CacheEnv:
         """Print detailed information about a step."""
         print(f"\n{'─'*60}")
         print(f"Step {self.t}:")
-        print(f"  Cache (before): {sorted(cache_before) if cache_before else '[]'}")
+        print(f"  Cache (before): {cache_before if cache_before else '[]'}")
         print(f"  Request:        Page {request}")
-        print(f"  Action:         Evict page {action}")
+        print(f"  Action:         Evict cache slot {action}")
+        if cache_before:
+            print(f"  Cache slot {action}: Page {cache_before[action] if action < len(cache_before) else 'N/A'}")
         print(f"  Result:         {'HIT ✓' if hit else 'MISS ✗'}")
         if not hit:
             if len(cache_before) < self.cache_size:
-                print(f"  Operation:      Cache not full → Insert page {request}")
+                print(f"  Operation:      Cache not full → Insert page {request} (action ignored)")
             else:
                 if evicted is not None:
-                    print(f"  Operation:      Evicted page {evicted} → Insert page {request}")
+                    print(f"  Operation:      Evicted page {evicted} from slot {action} → Insert page {request}")
                 else:
-                    print(f"  Operation:      Evicted page {action} → Insert page {request}")
+                    print(f"  Operation:      Evicted from slot {action} → Insert page {request}")
         else:
             print(f"  Operation:      No change (page already in cache)")
         print(f"  Reward:         {reward:+d}")
-        print(f"  Cache (after):  {sorted(cache_after) if cache_after else '[]'}")
+        print(f"  Cache (after):  {cache_after if cache_after else '[]'}")
     def step(self, action, verbose=False):
         """
         Execute one step in the environment.
         
         Args:
-            action: Page index to evict (if eviction is needed)
+            action: Cache slot index (0 to cache_size-1) to evict from (if eviction is needed)
             verbose: If True, print detailed step information
         
         Returns:
@@ -91,18 +93,14 @@ class CacheEnv:
         if not hit:
             if len(self.cache) < self.cache_size:  # cache is not full 
                 # still room in the cache, so just add the new page
-                self.cache.append(self.current_request) # ignore the action since there is space in the cache 
+                # Action is ignored when cache is not full
+                self.cache.append(self.current_request)
             else:
-                # cache is full, so we need to evict a page
-                if action in self.cache:
-                    # remove the action page from the cache 
-                    evicted = action
-                    self.cache.remove(action) # remove the action page from the cache 
-                else:
-                    # the action is a miss and is invalid, so we need to evict a page
-                    evicted = self.cache[0]
-                    self.cache.remove(self.cache[0])
-                # After eviction, insert the requested page
+                # Cache is full, action is a slot index (0 to cache_size-1)
+                # Clamp action to valid range
+                action = min(action, len(self.cache) - 1)
+                evicted = self.cache[action]
+                self.cache.pop(action)  # Remove page at slot 'action'
                 self.cache.append(self.current_request)
         
         cache_after = self.cache.copy()
@@ -148,7 +146,7 @@ if __name__ == "__main__":
     for t in range(env.episode_len):
         # Store current request before step (since step updates it)
         current_req = env.current_request
-        action = np.random.randint(0, env.num_pages)
+        action = np.random.randint(0, env.cache_size)
         next_state, reward, done, info = env.step(action, verbose=True)
         total_reward += reward
         state = next_state
