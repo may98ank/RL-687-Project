@@ -102,7 +102,7 @@ class CacheEnv:
                 evicted = self.cache[action]
                 self.cache.pop(action)  # Remove page at slot 'action'
                 self.cache.append(self.current_request)
-        
+
         cache_after = self.cache.copy()
         
         if verbose:
