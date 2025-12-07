@@ -52,11 +52,11 @@ The full state vector is of length $2N$.
 
 The action space is
 
-$$\mathcal{A} = \{0, 1, \dots, N-1\}$$
+$$\mathcal{A} = \{0, 1, \dots, C-1\}$$
 
 An action $a_t$ means:
 
-$$a_t = \text{"Evict page } a_t \text{ if eviction is needed."}$$
+$$a_t = \text{"Evict page at cache slot } a_t \text{ if eviction is needed."}$$
 
 If the request is a hit, the action is ignored (no-op).
 
