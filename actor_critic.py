@@ -1,97 +1,148 @@
+import numpy as np
 import torch
 from torch.distributions import Categorical
 
-def train_actor_critic(
-    env,
-    policy_net,
-    value_net,
-    optimizer_policy,
-    optimizer_value,
-    num_episodes=5000,
-    gamma=0.99,
-    device="cpu",
-    verbose=False
-):
-    # Episode logs
-    rewards_log = []
-    episode_lengths_log = []
-    hitrate_log = []  # Optional, for environments that provide "hit" in info
 
-    # Step-wise logs
+# ---------------------------------------------------------
+# STATE NORMALIZATION (critical for stability)
+# ---------------------------------------------------------
+def normalize_state(s, env):
+    x, x_dot, th, th_dot = s
+
+    return np.array([
+        x / env.x_threshold,
+        x_dot / 10.0,
+        th / env.theta_threshold_radians,
+        th_dot / 10.0
+    ], dtype=np.float32)
+
+
+# ---------------------------------------------------------
+# ONE-STEP ACTOR–CRITIC (TD(0))
+# ---------------------------------------------------------
+def train_actor_critic(
+        env,
+        policy_net,
+        value_net,
+        opt_actor,
+        opt_critic,
+        num_episodes=2000,
+        gamma=0.99,
+        entropy_coef=0.01,
+        normalize=True,
+        device="cpu",
+        verbose=True
+):
+    """
+    One-step Actor–Critic algorithm (episodic TD(0)).
+
+    Logs returned:
+        - rewards
+        - lengths
+        - actor_loss
+        - critic_loss
+        - td_error
+    """
+    policy_net.to(device)
+    value_net.to(device)
+
+    rewards_log = []
+    lengths_log = []
     actor_loss_log = []
     critic_loss_log = []
     td_error_log = []
 
     for ep in range(num_episodes):
 
-        state = env.reset()
-        state = torch.tensor(state, dtype=torch.float32, device=device)
+        s = env.reset()
+        if normalize:
+            s = normalize_state(s, env)
+        s = torch.tensor(s, dtype=torch.float32, device=device)
 
         done = False
         ep_reward = 0
-        ep_hits = 0
-        ep_steps = 0
-        tracking_hits = False  # Track if environment provides "hit" in info
+        ep_len = 0
+
+        ep_actor_losses = []
+        ep_critic_losses = []
+        ep_deltas = []
 
         while not done:
-
-            # -------- 1. Sample action from policy --------
-            logits = policy_net(state)
+            # --------------------------
+            # 1. ACTOR: sample action
+            # --------------------------
+            logits = policy_net(s)
             dist = Categorical(logits=logits)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
+            a = dist.sample()
+            log_prob = dist.log_prob(a)
 
-            # -------- 2. Environment step --------
-            next_state_np, reward, done, info = env.step(action.item())
-            next_state = torch.tensor(next_state_np, dtype=torch.float32, device=device)
+            # --------------------------
+            # 2. Step environment
+            # --------------------------
+            s2_np, r, done, info = env.step(a.item())
+            if normalize:
+                s2_np = normalize_state(s2_np, env)
+            s2 = torch.tensor(s2_np, dtype=torch.float32, device=device)
 
-            # -------- 3. Compute TD(0) advantage --------
-            value_s = value_net(state)
-            value_next = value_net(next_state).detach() if not done else 0.0
+            # --------------------------
+            # 3. TD(0) ADVANTAGE
+            # δ = r + γV(s') - V(s)
+            # --------------------------
+            V_s = value_net(s)
+            with torch.no_grad():
+                V_s2 = value_net(s2) if not done else torch.tensor(0.0, device=device)
 
-            td_target = reward + gamma * value_next
-            delta = td_target - value_s      # TD-error (Advantage estimator)
+            td_target = r + gamma * V_s2
+            delta = td_target - V_s
 
-            # -------- 4. Critic update --------
-            critic_loss = delta.pow(2)
-            optimizer_value.zero_grad()
+            # --------------------------
+            # 4. Critic update: minimize δ^2
+            # --------------------------
+            critic_loss = delta.pow(2).mean()
+            opt_critic.zero_grad()
             critic_loss.backward()
-            optimizer_value.step()
+            opt_critic.step()
 
-            # -------- 5. Actor update --------
-            actor_loss = -log_prob * delta.detach()
-            optimizer_policy.zero_grad()
+            # --------------------------
+            # 5. Actor update: policy gradient with baseline
+            # --------------------------
+            entropy = dist.entropy()
+            actor_loss = -log_prob * delta.detach() - entropy_coef * entropy
+            opt_actor.zero_grad()
             actor_loss.backward()
-            optimizer_policy.step()
+            opt_actor.step()
 
-            # -------- Advance to next state --------
-            state = next_state
+            # --------------------------
+            # Logging
+            # --------------------------
+            ep_reward += r
+            ep_len += 1
+            ep_actor_losses.append(actor_loss.item())
+            ep_critic_losses.append(critic_loss.item())
+            ep_deltas.append(delta.item())
 
-            ep_reward += reward
-            ep_steps += 1
+            s = s2
 
-        # ---------- End-of-episode logs ----------
-        episode_lengths_log.append(ep_steps)
+        # Episode summary logs
         rewards_log.append(ep_reward)
-        
-        # Calculate hit rate if hits were tracked
-        if tracking_hits and ep_steps > 0:
-            hitrate = ep_hits / ep_steps
-            hitrate_log.append(hitrate)
-        else:
-            hitrate_log.append(None)
+        lengths_log.append(ep_len)
+        actor_loss_log.append(float(np.mean(ep_actor_losses)))
+        critic_loss_log.append(float(np.mean(ep_critic_losses)))
+        td_error_log.append(float(np.mean(ep_deltas)))
 
-        if verbose and ep % 100 == 0:
-            if hitrate_log[-1] is not None:
-                print(f"[Episode {ep}] Reward={ep_reward:.1f}, Length={ep_steps}, HitRate={hitrate_log[-1]:.3f}")
-            else:
-                print(f"[Episode {ep}] Reward={ep_reward:.1f}, Length={ep_steps}")
+        if verbose and (ep % 100 == 0 or ep == num_episodes - 1):
+            print(
+                f"[Episode {ep}] "
+                f"Return={ep_reward:.1f}  Length={ep_len}  "
+                f"A_Loss={actor_loss_log[-1]:.4f}  "
+                f"C_Loss={critic_loss_log[-1]:.4f}  "
+                f"TD={td_error_log[-1]:.4f}"
+            )
 
     return {
         "rewards": rewards_log,
-        "episode_lengths": episode_lengths_log,
-        "hitrates": hitrate_log,  # May contain None values for environments without hit tracking
+        "lengths": lengths_log,
         "actor_loss": actor_loss_log,
         "critic_loss": critic_loss_log,
-        "td_error": td_error_log
+        "td_error": td_error_log,
     }

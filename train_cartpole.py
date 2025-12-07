@@ -1,119 +1,106 @@
+import os
+import argparse
 import numpy as np
 import torch
 from torch.optim import Adam
-import os
-import argparse
 
 from cartpole_env import CartPoleEnv
 from models import PolicyNetwork, ValueNetwork
 from actor_critic import train_actor_critic
-from utils_plotting import plot_curve
-from evaluate_cartpole import evaluate_policy, print_evaluation_results
 
 
+# ---------------------------------------------------------
+# OPTIONAL: Simple matplotlib plotter
+# ---------------------------------------------------------
+def plot_curve(values, save_path, title):
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(8,4))
+    plt.plot(values, alpha=0.5, label="raw")
+    if len(values) >= 50:
+        # 50-step moving average
+        kernel = np.ones(50)/50
+        smoothed = np.convolve(values, kernel, mode="valid")
+        plt.plot(range(49, 49+len(smoothed)), smoothed, linewidth=2, label="smoothed")
+    plt.title(title)
+    plt.xlabel("Episode")
+    plt.ylabel(title)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(save_path)
+    plt.close()
+
+
+# ---------------------------------------------------------
+# TRAIN SCRIPT
+# ---------------------------------------------------------
 def main():
-    # Configuration
-    parser = argparse.ArgumentParser(description='Train Actor-Critic on CartPole')
-    parser.add_argument('--num_episodes', type=int, default=1000, 
-                        help='Number of training episodes (default: 1000)')
-    parser.add_argument('--eval_episodes', type=int, default=100,
-                        help='Number of episodes for evaluation (default: 100)')
-    parser.add_argument('--no_eval', action='store_true',
-                        help='Skip evaluation after training')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--num_episodes", type=int, default=2000)
+    parser.add_argument("--eval_episodes", type=int, default=200)
+    parser.add_argument("--actor_lr", type=float, default=3e-4)
+    parser.add_argument("--critic_lr", type=float, default=1e-4)
+    parser.add_argument("--gamma", type=float, default=0.99)
+    parser.add_argument("--entropy_coef", type=float, default=0.01)
+    parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    # Environment
+    env = CartPoleEnv(max_episode_steps=500, seed=args.seed)
 
-    # CartPole environment setup
-    max_episode_steps = 500
-    env = CartPoleEnv(max_episode_steps=max_episode_steps)
+    # Networks
+    state_dim = 4
+    action_dim = 2
 
-    # State and action dimensions for CartPole
-    state_dim = 4  # [cart_pos, cart_vel, pole_angle, pole_angular_vel]
-    action_dim = 2  # [push left, push right]
+    policy_net = PolicyNetwork(state_dim, action_dim)
+    value_net = ValueNetwork(state_dim)
 
-    # Initialize networks
-    policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim=128).to(device)
-    value_net = ValueNetwork(state_dim, hidden_dim=128).to(device)
+    # Optimizers
+    opt_actor = Adam(policy_net.parameters(), lr=args.actor_lr)
+    opt_critic = Adam(value_net.parameters(), lr=args.critic_lr)
 
-    optimizer_policy = Adam(policy_net.parameters(), lr=3e-4)
-    optimizer_value = Adam(value_net.parameters(), lr=3e-4)
-
-    # Create directories for results
-    os.makedirs("results/logs", exist_ok=True)
-    os.makedirs("results/plots", exist_ok=True)
-    os.makedirs("checkpoints", exist_ok=True)
-    os.makedirs("results/evaluation", exist_ok=True)
-
-    print("\n" + "="*60)
-    print("TRAINING ACTOR-CRITIC ON CARTPOLE")
-    print("="*60)
-    print(f"State dimension: {state_dim}")
-    print(f"Action dimension: {action_dim}")
-    print(f"Max episode steps: {max_episode_steps}")
-    print(f"Number of training episodes: {args.num_episodes}")
-    print("="*60 + "\n")
-
+    # Train
     logs = train_actor_critic(
         env,
         policy_net,
         value_net,
-        optimizer_policy,
-        optimizer_value,
+        opt_actor,
+        opt_critic,
         num_episodes=args.num_episodes,
-        gamma=0.99,
-        device=device,
+        gamma=args.gamma,
+        entropy_coef=args.entropy_coef,
+        normalize=True,
+        device="cpu",
         verbose=True
     )
 
-    # ------------ Save logs ------------
-    print("\nSaving logs...")
-    for name, values in logs.items():
-        # Filter out None values for hitrates if not applicable
-        if name == "hitrates" and all(v is None for v in values):
-            continue
-        np.save(f"results/logs/cartpole_{name}.npy", np.array(values))
+    # Save directories
+    os.makedirs("results/logs/", exist_ok=True)
+    os.makedirs("results/plots/", exist_ok=True)
+    os.makedirs("checkpoints/", exist_ok=True)
 
-    # ------------ Plot curves ------------
-    print("Generating plots...")
-    plot_curve(logs["rewards"], "results/plots/cartpole_reward_curve.png", "Episode Reward")
-    plot_curve(logs["episode_lengths"], "results/plots/cartpole_episode_lengths.png", "Episode Length")
-    plot_curve(logs["actor_loss"], "results/plots/cartpole_actor_loss.png", "Actor Loss")
-    plot_curve(logs["critic_loss"], "results/plots/cartpole_critic_loss.png", "Critic Loss")
-    plot_curve(logs["td_error"], "results/plots/cartpole_td_error.png", "TD Error")
+    # Save numpy logs
+    np.save("results/logs/rewards.npy", np.array(logs["rewards"]))
+    np.save("results/logs/lengths.npy", np.array(logs["lengths"]))
+    np.save("results/logs/actor_loss.npy", np.array(logs["actor_loss"]))
+    np.save("results/logs/critic_loss.npy", np.array(logs["critic_loss"]))
+    np.save("results/logs/td_error.npy", np.array(logs["td_error"]))
 
-    # ------------ Save checkpoints ------------
-    print("Saving checkpoints...")
-    torch.save(policy_net.state_dict(), "checkpoints/cartpole_policy_final.pth")
-    torch.save(value_net.state_dict(), "checkpoints/cartpole_value_final.pth")
+    # Save plots
+    plot_curve(logs["rewards"], "results/plots/rewards.png", "Episode Rewards")
+    plot_curve(logs["lengths"], "results/plots/lengths.png", "Episode Lengths")
+    plot_curve(logs["actor_loss"], "results/plots/actor_loss.png", "Actor Loss")
+    plot_curve(logs["critic_loss"], "results/plots/critic_loss.png", "Critic Loss")
+    plot_curve(logs["td_error"], "results/plots/td_error.png", "TD Error")
 
-    print("\n" + "="*60)
-    print("Training complete!")
-    print("="*60)
-    print("Logs saved to: results/logs/")
-    print("Plots saved to: results/plots/")
-    print("Checkpoints saved to: checkpoints/")
-    print("="*60)
+    # Save weights
+    torch.save(policy_net.state_dict(), "checkpoints/policy_final.pth")
+    torch.save(value_net.state_dict(), "checkpoints/value_final.pth")
 
-    # ------------ Evaluate trained policy ------------
-    if not args.no_eval:
-        print("\n" + "="*60)
-        print("EVALUATING TRAINED POLICY")
-        print("="*60)
-        print(f"Running evaluation for {args.eval_episodes} episodes...")
-        
-        metrics = evaluate_policy(env, policy_net, num_episodes=args.eval_episodes, device=device, render=False)
-        metrics['success_count'] = int(metrics['success_rate'] * metrics['num_episodes'])
-        
-        print_evaluation_results(metrics)
-        
-        # Save evaluation results
-        np.save("results/evaluation/cartpole_eval_rewards.npy", np.array(metrics['episode_rewards']))
-        np.save("results/evaluation/cartpole_eval_lengths.npy", np.array(metrics['episode_lengths']))
-        print("Evaluation results saved to results/evaluation/")
-    else:
-        print("\nSkipping evaluation (use --no_eval to suppress this message)")
+    print("\nTraining Complete!")
+    print("Logs saved in results/logs/")
+    print("Plots saved in results/plots/")
+    print("Checkpoints saved in checkpoints/")
+    print("\nNow run evaluation or inspect logs for report.")
 
 
 if __name__ == "__main__":

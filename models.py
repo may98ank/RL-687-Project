@@ -1,30 +1,45 @@
-# Implmenting the policy and value networks
+import torch.nn as nn
 
-import torch 
-import torch.nn as nn 
-import torch.optim as optim 
 
+# ---------------------------------------------------------
+# POLICY NETWORK (π(a|s; θ))
+# ---------------------------------------------------------
 class PolicyNetwork(nn.Module):
-    def __init__(self, state_dim, action_dim,hidden_dim=64):
-        super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, action_dim)
-        self.relu = nn.ReLU()
+    """
+    Outputs logits over actions.
+    Architecture kept simple for Cart-Pole:
+      state_dim → 128 → 128 → action_dim
+    """
+    def __init__(self, state_dim, action_dim, hidden_dim=128):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim)
+        )
 
-        
     def forward(self, x):
-        x = self.relu(self.fc1(x))
-        x =self.fc2(x)
-        return x
-    
+        return self.net(x)  # logits (NOT softmax)
+
+
+# ---------------------------------------------------------
+# VALUE NETWORK (V(s; w))
+# ---------------------------------------------------------
 class ValueNetwork(nn.Module):
-    def __init__(self, state_dim, hidden_dim=64):
-        super(ValueNetwork, self).__init__()
-        self.fc1 = nn.Linear(state_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 1)
-        self.relu = nn.ReLU()
+    """
+    Outputs a scalar state-value V(s).
+    """
+    def __init__(self, state_dim, hidden_dim=128):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
 
     def forward(self, x):
-        x = self.relu(self.fc1(x))
-        x = self.fc2(x)
-        return x.squeeze(-1)
+        return self.net(x).squeeze(-1)

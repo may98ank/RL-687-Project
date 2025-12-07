@@ -1,143 +1,135 @@
 import numpy as np
 import torch
 from torch.distributions import Categorical
-import os
 
 from cartpole_env import CartPoleEnv
-from models import PolicyNetwork, ValueNetwork
+from models import PolicyNetwork
 
 
-def evaluate_policy(env, policy_net, num_episodes=100, device="cpu", render=False):
-    """
-    Evaluate a trained policy on the environment.
-    
-    Args:
-        env: The environment to evaluate on
-        policy_net: Trained policy network
-        num_episodes: Number of episodes to run
-        device: Device to run on
-        render: Whether to print step-by-step info (for debugging)
-    
-    Returns:
-        Dictionary with evaluation metrics
-    """
+# ---------------------------------------------------------
+# SAME NORMALIZATION USED IN TRAINING
+# ---------------------------------------------------------
+def normalize_state(s, env):
+    x, x_dot, th, th_dot = s
+    return np.array([
+        x / env.x_threshold,
+        x_dot / 10.0,
+        th / env.theta_threshold_radians,
+        th_dot / 10.0,
+    ], dtype=np.float32)
+
+
+# ---------------------------------------------------------
+# EVALUATION LOOP
+# ---------------------------------------------------------
+def evaluate_policy(
+        env,
+        policy_net,
+        num_episodes=100,
+        normalize=True,
+        device="cpu",
+        render=False
+):
+    rewards = []
+    lengths = []
+    success_count = 0
+
+    policy_net.to(device)
     policy_net.eval()
-    
-    episode_rewards = []
-    episode_lengths = []
-    success_count = 0  # Episodes that reached max steps
-    
+
     for ep in range(num_episodes):
-        state = env.reset()
-        state = torch.tensor(state, dtype=torch.float32, device=device)
-        
+        s = env.reset()
+        if normalize:
+            s = normalize_state(s, env)
+        s = torch.tensor(s, dtype=torch.float32, device=device)
+
         done = False
         ep_reward = 0
-        ep_steps = 0
-        
+        ep_len = 0
+
         while not done:
-            # Sample action from policy
+            if render:
+                env.render()
+
+            # Policy forward
             with torch.no_grad():
-                logits = policy_net(state)
+                logits = policy_net(s)
                 dist = Categorical(logits=logits)
-                action = dist.sample()
-            
+                a = dist.sample()
+
             # Step environment
-            next_state, reward, done, info = env.step(action.item())
-            
-            ep_reward += reward
-            ep_steps += 1
-            
-            if render and ep_steps % 50 == 0:
-                print(f"  Step {ep_steps}: action={action.item()}, reward={reward:.1f}, "
-                      f"cart_pos={next_state[0]:.3f}, pole_angle={next_state[2]:.3f}")
-            
-            state = torch.tensor(next_state, dtype=torch.float32, device=device)
-        
-        episode_rewards.append(ep_reward)
-        episode_lengths.append(ep_steps)
-        
-        # Check if episode was successful (reached max steps)
-        if ep_steps >= env.max_episode_steps:
+            s2_np, r, done, info = env.step(a.item())
+            if normalize:
+                s2_np = normalize_state(s2_np, env)
+            s2 = torch.tensor(s2_np, dtype=torch.float32, device=device)
+
+            ep_reward += r
+            ep_len += 1
+            s = s2
+
+        rewards.append(ep_reward)
+        lengths.append(ep_len)
+
+        # count success: reaching max steps
+        if ep_len >= env.max_episode_steps:
             success_count += 1
-    
-    # Calculate statistics
-    metrics = {
+
+    return {
         "num_episodes": num_episodes,
-        "mean_reward": np.mean(episode_rewards),
-        "std_reward": np.std(episode_rewards),
-        "min_reward": np.min(episode_rewards),
-        "max_reward": np.max(episode_rewards),
-        "mean_episode_length": np.mean(episode_lengths),
-        "std_episode_length": np.std(episode_lengths),
-        "success_rate": success_count / num_episodes,
-        "episode_rewards": episode_rewards,
-        "episode_lengths": episode_lengths
+        "episode_rewards": np.array(rewards),
+        "episode_lengths": np.array(lengths),
+        "mean_reward": float(np.mean(rewards)),
+        "min_reward": float(np.min(rewards)),
+        "max_reward": float(np.max(rewards)),
+        "mean_length": float(np.mean(lengths)),
+        "success_rate": float(success_count / num_episodes),
+        "success_count": success_count,
     }
-    
-    return metrics
 
 
+# ---------------------------------------------------------
+# FUNCTION TO PRINT RESULTS
+# ---------------------------------------------------------
 def print_evaluation_results(metrics):
-    """Print evaluation results in a readable format."""
-    print("\n" + "="*60)
-    print("CARTPOLE EVALUATION RESULTS")
-    print("="*60)
-    print(f"Number of episodes: {metrics['num_episodes']}")
-    print(f"\n📊 Reward Statistics:")
-    print(f"  Mean reward:     {metrics['mean_reward']:.2f} ± {metrics['std_reward']:.2f}")
-    print(f"  Min reward:      {metrics['min_reward']:.2f}")
-    print(f"  Max reward:      {metrics['max_reward']:.2f}")
-    print(f"\n📏 Episode Length Statistics:")
-    print(f"  Mean length:     {metrics['mean_episode_length']:.2f} ± {metrics['std_episode_length']:.2f}")
-    print(f"  Min length:      {np.min(metrics['episode_lengths'])}")
-    print(f"  Max length:      {np.max(metrics['episode_lengths'])}")
-    print(f"\n✅ Success Rate:")
-    print(f"  Episodes reaching max steps: {metrics['success_count']}/{metrics['num_episodes']}")
-    print(f"  Success rate:    {metrics['success_rate']*100:.2f}%")
-    print("="*60 + "\n")
+    print("\n==================== CARTPOLE EVALUATION ====================")
+    print(f" Episodes:          {metrics['num_episodes']}")
+    print(f" Mean reward:       {metrics['mean_reward']:.2f}")
+    print(f" Min reward:        {metrics['min_reward']:.2f}")
+    print(f" Max reward:        {metrics['max_reward']:.2f}")
+    print(f" Mean length:       {metrics['mean_length']:.2f}")
+    print(f" Success episodes:  {metrics['success_count']}")
+    print(f" Success rate:      {metrics['success_rate']*100:.2f}%")
+    print("=============================================================\n")
 
 
-def main():
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
-    
-    # Environment setup
-    max_episode_steps = 500
-    env = CartPoleEnv(max_episode_steps=max_episode_steps)
-    
-    # Network dimensions
-    state_dim = 4
-    action_dim = 2
-    
-    # Load trained models
-    policy_path = "checkpoints/cartpole_policy_final.pth"
-    
-    if not os.path.exists(policy_path):
-        print(f"❌ Error: Policy checkpoint not found at {policy_path}")
-        print("Please train the model first using train_cartpole.py")
-        return
-    
-    print(f"Loading policy from {policy_path}...")
-    policy_net = PolicyNetwork(state_dim, action_dim, hidden_dim=128).to(device)
-    policy_net.load_state_dict(torch.load(policy_path, map_location=device))
-    policy_net.eval()
-    
-    print("Evaluating policy...")
-    metrics = evaluate_policy(env, policy_net, num_episodes=100, device=device, render=False)
-    
-    # Add success_count for printing
-    metrics['success_count'] = int(metrics['success_rate'] * metrics['num_episodes'])
-    
-    print_evaluation_results(metrics)
-    
-    # Save evaluation results
-    os.makedirs("results/evaluation", exist_ok=True)
-    np.save("results/evaluation/cartpole_eval_rewards.npy", np.array(metrics['episode_rewards']))
-    np.save("results/evaluation/cartpole_eval_lengths.npy", np.array(metrics['episode_lengths']))
-    
-    print("Evaluation results saved to results/evaluation/")
-
-
+# ---------------------------------------------------------
+# OPTIONAL: SCRIPT MODE
+# ---------------------------------------------------------
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--episodes", type=int, default=200)
+    parser.add_argument("--policy_path", type=str, default="checkpoints/policy_final.pth")
+    parser.add_argument("--render", action="store_true")
+    args = parser.parse_args()
+
+    # Create env
+    env = CartPoleEnv(max_episode_steps=500)
+
+    # Load policy
+    policy = PolicyNetwork(state_dim=4, action_dim=2)
+    policy.load_state_dict(torch.load(args.policy_path, map_location="cpu"))
+    policy.eval()
+
+    # Evaluate
+    metrics = evaluate_policy(
+        env,
+        policy,
+        num_episodes=args.episodes,
+        normalize=True,
+        device="cpu",
+        render=args.render
+    )
+
+    print_evaluation_results(metrics)
