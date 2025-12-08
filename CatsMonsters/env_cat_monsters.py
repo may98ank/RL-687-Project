@@ -36,7 +36,6 @@ class CatMonstersEnv:
             np.random.seed(seed)
     
     def _state_to_onehot(self, state):
-        """Convert (r, c) state to one-hot vector of length 25."""
         if state == 's_infinity':
             return np.zeros(25)
         r, c = state
@@ -46,83 +45,68 @@ class CatMonstersEnv:
         return onehot
     
     def _is_valid_state(self, state):
-        """Check if state is valid (within bounds)."""
         if state == 's_infinity':
             return True
         r, c = state
         return 0 <= r <= 4 and 0 <= c <= 4
     
     def _is_forbidden_furniture(self, state):
-        """Check if state is forbidden furniture."""
         return state in self.forbidden_furniture
     
     def _get_confused_right_direction(self, action):
-        """Get the confused right direction for an action."""
         confused_right = {
-            'AU': (0, 1),   # Up -> Right
-            'AD': (0, -1),  # Down -> Left
-            'AL': (-1, 0),  # Left -> Up
-            'AR': (1, 0)    # Right -> Down
+            'AU': (0, 1),  
+            'AD': (0, -1),  
+            'AL': (-1, 0),  
+            'AR': (1, 0)    
         }
         return confused_right[action]
     
     def _get_confused_left_direction(self, action):
-        """Get the confused left direction for an action."""
         confused_left = {
-            'AU': (0, -1),  # Up -> Left
-            'AD': (0, 1),   # Down -> Right
-            'AL': (1, 0),   # Left -> Down
-            'AR': (-1, 0)   # Right -> Up
+            'AU': (0, -1),  
+            'AD': (0, 1),   
+            'AL': (1, 0),   
+            'AR': (-1, 0)   
         }
         return confused_left[action]
     
     def _get_all_possible_next_states(self, state, action):
-        """
-        Get all possible next states and their probabilities given current state and action.
-        Returns dictionary mapping next_state -> probability.
-        """
+    
         r, c = state
         probabilities = {}
         
-        # Define movement directions
         directions = {
-            'AU': (-1, 0),  # Up
-            'AD': (1, 0),   # Down
-            'AL': (0, -1),  # Left
-            'AR': (0, 1)    # Right
+            'AU': (-1, 0),  
+            'AD': (1, 0),   
+            'AL': (0, -1),  
+            'AR': (0, 1)    
         }
         
-        # Get the intended direction
         intended_dr, intended_dc = directions[action]
         
-        # Calculate confused directions
         confused_right_dr, confused_right_dc = self._get_confused_right_direction(action)
         confused_left_dr, confused_left_dc = self._get_confused_left_direction(action)
         
-        # Calculate all possible next positions
         intended_pos = (r + intended_dr, c + intended_dc)
         confused_right_pos = (r + confused_right_dr, c + confused_right_dc)
         confused_left_pos = (r + confused_left_dr, c + confused_left_dc)
         
-        # 70% probability: intended direction
         if self._is_valid_state(intended_pos) and not self._is_forbidden_furniture(intended_pos):
             probabilities[intended_pos] = probabilities.get(intended_pos, 0) + 0.7
         else:
             probabilities[state] = probabilities.get(state, 0) + 0.7
         
-        # 12% probability: confused right
         if self._is_valid_state(confused_right_pos) and not self._is_forbidden_furniture(confused_right_pos):
             probabilities[confused_right_pos] = probabilities.get(confused_right_pos, 0) + 0.12
         else:
             probabilities[state] = probabilities.get(state, 0) + 0.12
         
-        # 12% probability: confused left
         if self._is_valid_state(confused_left_pos) and not self._is_forbidden_furniture(confused_left_pos):
             probabilities[confused_left_pos] = probabilities.get(confused_left_pos, 0) + 0.12
         else:
             probabilities[state] = probabilities.get(state, 0) + 0.12
         
-        # 6% probability: sleepy, doesn't move
         probabilities[state] = probabilities.get(state, 0) + 0.06
         
         return probabilities
@@ -157,42 +141,21 @@ class CatMonstersEnv:
         return next_state
     
     def reset(self):
-        """
-        Reset the environment to a random initial state.
-        
-        Returns:
-            state: One-hot encoded state vector (numpy array of length 25)
-        """
-        # Choose random initial state (not forbidden furniture and not food)
+       
         valid_states = [s for s in self.states if s not in self.forbidden_furniture and s != self.food]
         self.current_state = random.choice(valid_states)
         self.t = 0
         return self._state_to_onehot(self.current_state)
     
     def step(self, action_idx, verbose=False):
-        """
-        Execute one step in the environment.
         
-        Args:
-            action_idx: Integer index of action (0='AU', 1='AD', 2='AL', 3='AR')
-            verbose: If True, print step information
-        
-        Returns:
-            next_state: One-hot encoded state vector
-            reward: Scalar reward
-            done: Boolean indicating if episode is done
-            info: Dictionary with additional information
-        """
-        # Convert action index to action string
         action = self.idx_to_action[action_idx]
         
-        # Get next state
         next_state = self._get_next_state(self.current_state, action)
         
-        # Check if terminal (reached food)
         reached_food = False
         if next_state == 'terminal':
-            reward = 10.0  # Reached food
+            reward = 10.0  
             done = True
             reached_food = True
             self.current_state = None
@@ -203,9 +166,8 @@ class CatMonstersEnv:
         
         self.t += 1
         
-        # Convert state to one-hot for return
         if done:
-            state_vector = np.zeros(25)  # Terminal state
+            state_vector = np.zeros(25)  
         else:
             state_vector = self._state_to_onehot(self.current_state)
         
@@ -222,13 +184,11 @@ class CatMonstersEnv:
         return state_vector, reward, done, info
     
     def get_state(self):
-        """Get current state as one-hot vector."""
         if self.current_state is None:
             return np.zeros(25)
         return self._state_to_onehot(self.current_state)
     
     def print_state(self):
-        """Print the current state in a readable format."""
         print(f"\n{'='*60}")
         print(f"Time Step: {self.t}")
         print(f"{'='*60}")

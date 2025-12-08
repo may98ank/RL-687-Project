@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from torch.distributions import Categorical
 from models import PolicyNetwork, ValueNetwork
-from env_cat_monsters import CatMonstersEnv
+from cartpole_env import CartPoleEnv
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import os

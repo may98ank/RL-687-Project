@@ -14,8 +14,8 @@ def reinforce_train_cat_monsters():
     
     # Environment parameters
     env = CatMonstersEnv(seed=42)
-    state_dim = 25  # 5x5 grid, one-hot encoded
-    action_dim = 4  # 4 actions: AU, AD, AL, AR
+    state_dim = 25  
+    action_dim = 4  
     
     policy_net = PolicyNetwork(state_dim=state_dim, action_dim=action_dim, hidden_dim=128).to(device)
     value_net = ValueNetwork(state_dim=state_dim, hidden_dim=128).to(device)
@@ -23,7 +23,6 @@ def reinforce_train_cat_monsters():
     optimiser_policy = torch.optim.Adam(policy_net.parameters(), lr=3e-4)
     optimiser_value = torch.optim.Adam(value_net.parameters(), lr=3e-4)
     
-    # Setup plot directory
     plot_dir = "plots/cat_monsters_reinforce"
     os.makedirs(plot_dir, exist_ok=True)
     
