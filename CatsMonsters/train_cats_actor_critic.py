@@ -74,17 +74,17 @@ def main():
     )
 
     # Save directories
-    os.makedirs("results/logs/cats_actor_critic/", exist_ok=True)
-    os.makedirs("results/plots/cats_actor_critic/", exist_ok=True)
+
+    os.makedirs("plots/cats_monsters_actor_critic/", exist_ok=True)
     os.makedirs("checkpoints/cats_actor_critic/", exist_ok=True)
 
 
     # Save plots
-    plot_curve(logs["rewards"], "results/plots/cats_actor_critic/rewards.png", "Episode Rewards")
-    plot_curve(logs["lengths"], "results/plots/cats_actor_critic/lengths.png", "Episode Lengths")
-    plot_curve(logs["actor_loss"], "results/plots/cats_actor_critic/actor_loss.png", "Actor Loss")
-    plot_curve(logs["critic_loss"], "results/plots/cats_actor_critic/critic_loss.png", "Critic Loss")
-    plot_curve(logs["td_error"], "results/plots/cats_actor_critic/td_error.png", "TD Error")
+    plot_curve(logs["rewards"], "plots/cats_monsters_actor_critic/rewards.png", "Episode Rewards")
+    plot_curve(logs["lengths"], "plots/cats_monsters_actor_critic/lengths.png", "Episode Lengths")
+    plot_curve(logs["actor_loss"], "plots/cats_monsters_actor_critic/actor_loss.png", "Actor Loss")
+    plot_curve(logs["critic_loss"], "plots/cats_monsters_actor_critic/critic_loss.png", "Critic Loss")
+    plot_curve(logs["td_error"], "plots/cats_monsters_actor_critic/td_error.png", "TD Error")
 
     # Save weights
     torch.save(policy_net.state_dict(), "checkpoints/cats_actor_critic/policy_net_cat_monsters_actor_critic.pth")
