@@ -89,8 +89,13 @@ def train_actor_critic(
             # δ = r + γV(s') - V(s)
             # --------------------------
             V_s = value_net(s)
+            
+            if V_s.dim() > 0:
+                V_s = V_s.squeeze()
             with torch.no_grad():
                 V_s2 = value_net(s2) if not done else torch.tensor(0.0, device=device)
+                if V_s2.dim() > 0:
+                    V_s2 = V_s2.squeeze()
 
             td_target = r + gamma * V_s2
             delta = td_target - V_s
@@ -98,7 +103,7 @@ def train_actor_critic(
             # --------------------------
             # 4. Critic update: minimize δ^2
             # --------------------------
-            critic_loss = delta.pow(2).mean()
+            critic_loss = delta.pow(2)
             opt_critic.zero_grad()
             critic_loss.backward()
             opt_critic.step()

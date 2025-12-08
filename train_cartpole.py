@@ -35,7 +35,7 @@ def plot_curve(values, save_path, title):
 # ---------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_episodes", type=int, default=2000)
+    parser.add_argument("--num_episodes", type=int, default=3000)
     parser.add_argument("--eval_episodes", type=int, default=200)
     parser.add_argument("--actor_lr", type=float, default=3e-4)
     parser.add_argument("--critic_lr", type=float, default=1e-4)

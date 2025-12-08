@@ -201,9 +201,11 @@ class CatMonstersEnv:
         next_state = self._get_next_state(self.current_state, action)
         
         # Check if terminal (reached food)
+        reached_food = False
         if next_state == 'terminal':
             reward = 10.0  # Reached food
             done = True
+            reached_food = True
             self.current_state = None
         else:
             reward = self._get_reward(self.current_state, action, next_state)
@@ -222,7 +224,7 @@ class CatMonstersEnv:
             'state': self.current_state,
             'action': action,
             'hit_monster': next_state in self.monsters if next_state != 'terminal' else False,
-            'reached_food': (self.current_state == self.food) if done else False
+            'reached_food': reached_food
         }
         
         if verbose:
