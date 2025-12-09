@@ -6,13 +6,36 @@ from reinforce import sample_episode
 import matplotlib.pyplot as plt
 import os
 
+def sample_episode_greedy(env: CatMonstersEnv, policy_net: PolicyNetwork, device: torch.device) -> dict:
+    states, actions, rewards = [], [], []
+    state = env.reset()
+    done = False
+    while not done:
+        s_tensor = torch.tensor(state, dtype=torch.float32, device=device)
+        action_logits = policy_net(s_tensor)
+        action = torch.argmax(action_logits).item()
+        next_state, reward, done, _ = env.step(action)
+        states.append(s_tensor)
+        actions.append(action)
+        rewards.append(reward)
+        state = next_state
+    
+    total_reward = sum(rewards)
+    avg_reward = np.mean(rewards) if rewards else 0.0
+    episode_stats = {
+        'total_reward': total_reward,
+        'avg_reward': avg_reward,
+        'num_steps': len(rewards)
+    }
+    return states, actions, rewards, episode_stats
+
 def eval_cat_monsters_env(env: CatMonstersEnv, policy_net: PolicyNetwork, device: torch.device, num_episodes: int=1000) -> dict:
    
     episode_rewards = []
     episode_steps = []
 
     for _ in range(num_episodes):
-        _, _, _, stats = sample_episode(env, policy_net, device)
+        _, _, _, stats = sample_episode_greedy(env, policy_net, device)
         episode_rewards.append(stats['total_reward'])
         episode_steps.append(stats['num_steps'])
     return {
@@ -51,7 +74,7 @@ def test_policy_and_value_networks():
     value_net.to(device)
     env = CatMonstersEnv(seed=42)
     os.makedirs("eval_results/eval_actor_critic", exist_ok=True)
-    eval_results = eval_cat_monsters_env(env, policy_net, device, num_episodes=100)
+    eval_results = eval_cat_monsters_env(env, policy_net, device, num_episodes=1000)
     
     print(f"\nActor-Critic Evaluation Results (over {len(eval_results['episode_rewards'])} episodes):")
     print(f"  Average Reward: {eval_results['avg_reward']:.4f} ± {eval_results['std_reward']:.4f}")
@@ -63,6 +86,7 @@ def test_policy_and_value_networks():
     
     os.makedirs("results/eval", exist_ok=True)
     
+    plt.figure(figsize=(12, 12))
     
     plt.subplot(2, 2, 1)
     plt.plot(eval_results['episode_rewards'], alpha=0.6, color='blue')
@@ -85,6 +109,8 @@ def test_policy_and_value_networks():
     plt.subplot(2, 2, 3)
     plt.hist(eval_results['episode_rewards'], bins=20, alpha=0.7, color='blue', edgecolor='black')
     plt.axvline(x=eval_results['avg_reward'], color='red', linestyle='--', linewidth=2, label=f'Mean: {eval_results["avg_reward"]:.2f}')
+    plt.axvline(x=eval_results['avg_reward'] + eval_results['std_reward'], color='red', linestyle=':', linewidth=1.5, alpha=0.7, label=f'±1 Std: {eval_results["std_reward"]:.2f}')
+    plt.axvline(x=eval_results['avg_reward'] - eval_results['std_reward'], color='red', linestyle=':', linewidth=1.5, alpha=0.7)
     plt.xlabel('Reward')
     plt.ylabel('Frequency')
     plt.title('Reward Distribution (Actor-Critic)')
@@ -94,6 +120,8 @@ def test_policy_and_value_networks():
     plt.subplot(2, 2, 4)
     plt.hist(eval_results['episode_steps'], bins=20, alpha=0.7, color='green', edgecolor='black')
     plt.axvline(x=eval_results['avg_steps'], color='orange', linestyle='--', linewidth=2, label=f'Mean: {eval_results["avg_steps"]:.2f}')
+    plt.axvline(x=eval_results['avg_steps'] + eval_results['std_steps'], color='orange', linestyle=':', linewidth=1.5, alpha=0.7, label=f'±1 Std: {eval_results["std_steps"]:.2f}')
+    plt.axvline(x=eval_results['avg_steps'] - eval_results['std_steps'], color='orange', linestyle=':', linewidth=1.5, alpha=0.7)
     plt.xlabel('Steps')
     plt.ylabel('Frequency')
     plt.title('Steps Distribution (Actor-Critic)')

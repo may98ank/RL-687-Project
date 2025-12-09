@@ -42,6 +42,7 @@ def train_actor_critic(
         - actor_loss
         - critic_loss
         - td_error
+        - entropy
     """
     policy_net.to(device)
     value_net.to(device)
@@ -51,6 +52,7 @@ def train_actor_critic(
     actor_loss_log = []
     critic_loss_log = []
     td_error_log = []
+    entropy_log = []
 
     for ep in range(num_episodes):
 
@@ -66,6 +68,7 @@ def train_actor_critic(
         ep_actor_losses = []
         ep_critic_losses = []
         ep_deltas = []
+        ep_entropies = []
 
         while not done:
             # --------------------------
@@ -125,6 +128,7 @@ def train_actor_critic(
             ep_actor_losses.append(actor_loss.item())
             ep_critic_losses.append(critic_loss.item())
             ep_deltas.append(delta.item())
+            ep_entropies.append(entropy.item())
 
             s = s2
 
@@ -134,6 +138,7 @@ def train_actor_critic(
         actor_loss_log.append(float(np.mean(ep_actor_losses)))
         critic_loss_log.append(float(np.mean(ep_critic_losses)))
         td_error_log.append(float(np.mean(ep_deltas)))
+        entropy_log.append(float(np.mean(ep_entropies)))
 
         if verbose and (ep % 100 == 0 or ep == num_episodes - 1):
             print(
@@ -150,4 +155,5 @@ def train_actor_critic(
         "actor_loss": actor_loss_log,
         "critic_loss": critic_loss_log,
         "td_error": td_error_log,
+        "entropy": entropy_log,
     }

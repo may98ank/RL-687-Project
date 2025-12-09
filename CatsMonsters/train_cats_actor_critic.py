@@ -66,11 +66,82 @@ def main():
 
     os.makedirs("plots/cats_monsters_actor_critic/", exist_ok=True)
     os.makedirs("checkpoints/cats_actor_critic/", exist_ok=True)
+    
+    # Save individual plots
     plot_curve(logs["rewards"], "plots/cats_monsters_actor_critic/rewards.png", "Episode Rewards")
     plot_curve(logs["lengths"], "plots/cats_monsters_actor_critic/lengths.png", "Episode Lengths")
     plot_curve(logs["actor_loss"], "plots/cats_monsters_actor_critic/actor_loss.png", "Actor Loss")
     plot_curve(logs["critic_loss"], "plots/cats_monsters_actor_critic/critic_loss.png", "Critic Loss")
-    plot_curve(logs["td_error"], "plots/cats_monsters_actor_critic/td_error.png", "TD Error")
+    # plot_curve(logs["td_error"], "plots/cats_monsters_actor_critic/td_error.png", "TD Error")
+    plot_curve(logs["entropy"], "plots/cats_monsters_actor_critic/entropy.png", "Policy Entropy")
+    
+    # Create combined grid plot
+    import matplotlib.pyplot as plt
+    episodes = np.arange(1, args.num_episodes + 1)
+    window = 100
+    
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+    
+    # Top left: Episode Rewards
+    axes[0, 0].plot(episodes, logs["rewards"], alpha=0.2, color='blue')
+    if len(logs["rewards"]) >= window:
+        moving_avg_reward = np.convolve(logs["rewards"], np.ones(window) / window, mode='valid')
+        axes[0, 0].plot(episodes[window - 1:], moving_avg_reward, color='red', linewidth=2)
+    axes[0, 0].set_xlabel('Episode')
+    axes[0, 0].set_ylabel('Total Reward')
+    axes[0, 0].set_title('Episode Reward')
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Top middle: Episode Lengths
+    axes[0, 1].plot(episodes, logs["lengths"], alpha=0.2, color='green')
+    if len(logs["lengths"]) >= window:
+        moving_avg_lengths = np.convolve(logs["lengths"], np.ones(window) / window, mode='valid')
+        axes[0, 1].plot(episodes[window - 1:], moving_avg_lengths, color='orange', linewidth=2)
+    axes[0, 1].set_xlabel('Episode')
+    axes[0, 1].set_ylabel('Number of Steps')
+    axes[0, 1].set_title('Episode Lengths')
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # # Top right: TD Error
+    # axes[0, 2].plot(episodes, logs["td_error"], alpha=0.2, color='cyan')
+    # if len(logs["td_error"]) >= window:
+    #     moving_avg_td = np.convolve(logs["td_error"], np.ones(window) / window, mode='valid')
+    #     axes[0, 2].plot(episodes[window - 1:], moving_avg_td, color='darkcyan', linewidth=2)
+    # axes[0, 2].set_xlabel('Episode')
+    # axes[0, 2].set_ylabel('TD Error')
+    # axes[0, 2].set_title('TD Error')
+    # axes[0, 2].grid(True, alpha=0.3)
+    
+    # Bottom left: Training Losses
+    axes[1, 0].plot(episodes, logs["actor_loss"], alpha=0.2, color='purple', label='Actor')
+    axes[1, 0].plot(episodes, logs["critic_loss"], alpha=0.2, color='brown', label='Critic')
+    if len(logs["actor_loss"]) >= window:
+        moving_avg_actor = np.convolve(logs["actor_loss"], np.ones(window) / window, mode='valid')
+        moving_avg_critic = np.convolve(logs["critic_loss"], np.ones(window) / window, mode='valid')
+        axes[1, 0].plot(episodes[window - 1:], moving_avg_actor, color='purple', linewidth=2)
+        axes[1, 0].plot(episodes[window - 1:], moving_avg_critic, color='brown', linewidth=2)
+    axes[1, 0].set_xlabel('Episode')
+    axes[1, 0].set_ylabel('Loss')
+    axes[1, 0].set_title('Training Losses')
+    axes[1, 0].legend()
+    axes[1, 0].grid(True, alpha=0.3)
+    
+    # Bottom middle: Policy Entropy
+    axes[1, 1].plot(episodes, logs["entropy"], alpha=0.2, color='teal')
+    if len(logs["entropy"]) >= window:
+        moving_avg_entropy = np.convolve(logs["entropy"], np.ones(window) / window, mode='valid')
+        axes[1, 1].plot(episodes[window - 1:], moving_avg_entropy, color='darkblue', linewidth=2)
+    axes[1, 1].set_xlabel('Episode')
+    axes[1, 1].set_ylabel('Entropy')
+    axes[1, 1].set_title('Policy Entropy')
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    # Bottom right: Empty (or could add another metric)
+    axes[1, 2].axis('off')
+    
+    fig.tight_layout()
+    fig.savefig("plots/cats_monsters_actor_critic/all_metrics.png", dpi=150)
+    plt.close(fig)
 
     # Save weights
     torch.save(policy_net.state_dict(), "checkpoints/cats_actor_critic/policy_net_cat_monsters_actor_critic.pth")

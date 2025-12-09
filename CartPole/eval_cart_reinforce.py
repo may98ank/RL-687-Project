@@ -35,7 +35,7 @@ def eval_cartpole_env(env: CartPoleEnv, policy_net: PolicyNetwork, device: torch
     episode_steps = []
 
     for _ in range(num_episodes):
-        _, _, _, stats = sample_episode(env, policy_net, device)
+        _, _, _, stats = sample_episode_greedy(env, policy_net, device)
         episode_rewards.append(stats['total_reward'])
         episode_steps.append(stats['num_steps'])
     return {

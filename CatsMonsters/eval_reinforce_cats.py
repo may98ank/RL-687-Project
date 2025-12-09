@@ -67,7 +67,7 @@ def test_policy_and_value_networks():
     env = CatMonstersEnv(seed=42)
     os.makedirs("eval_results/eval_reinforce", exist_ok=True)
     
-    eval_results = eval_cat_monsters_env(env, policy_net, device, num_episodes=100)
+    eval_results = eval_cat_monsters_env(env, policy_net, device, num_episodes=1000)
     
     # Print summary statistics
     print(f"\nEvaluation Results (over {len(eval_results['episode_rewards'])} episodes):")
@@ -105,9 +105,11 @@ def test_policy_and_value_networks():
     plt.subplot(2, 2, 3)
     plt.hist(eval_results['episode_rewards'], bins=20, alpha=0.7, color='blue', edgecolor='black')
     plt.axvline(x=eval_results['avg_reward'], color='red', linestyle='--', linewidth=2, label=f'Mean: {eval_results["avg_reward"]:.2f}')
+    plt.axvline(x=eval_results['avg_reward'] + eval_results['std_reward'], color='red', linestyle=':', linewidth=1.5, alpha=0.7, label=f'±1 Std: {eval_results["std_reward"]:.2f}')
+    plt.axvline(x=eval_results['avg_reward'] - eval_results['std_reward'], color='red', linestyle=':', linewidth=1.5, alpha=0.7)
     plt.xlabel('Reward')
     plt.ylabel('Frequency')
-    plt.title('Reward Distribution')
+    plt.title('Reward Distribution (REINFORCE)')
     plt.legend()
     plt.grid(True, alpha=0.3)
     
@@ -115,9 +117,11 @@ def test_policy_and_value_networks():
     plt.subplot(2, 2, 4)
     plt.hist(eval_results['episode_steps'], bins=20, alpha=0.7, color='green', edgecolor='black')
     plt.axvline(x=eval_results['avg_steps'], color='orange', linestyle='--', linewidth=2, label=f'Mean: {eval_results["avg_steps"]:.2f}')
+    plt.axvline(x=eval_results['avg_steps'] + eval_results['std_steps'], color='orange', linestyle=':', linewidth=1.5, alpha=0.7, label=f'±1 Std: {eval_results["std_steps"]:.2f}')
+    plt.axvline(x=eval_results['avg_steps'] - eval_results['std_steps'], color='orange', linestyle=':', linewidth=1.5, alpha=0.7)
     plt.xlabel('Steps')
     plt.ylabel('Frequency')
-    plt.title('Steps Distribution')
+    plt.title('Steps Distribution (REINFORCE)')
     plt.legend()
     plt.grid(True, alpha=0.3)
     

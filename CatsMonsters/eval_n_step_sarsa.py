@@ -81,7 +81,7 @@ def test_q_network():
 
     env = CatMonstersEnv(seed=42)
 
-    eval_results = eval_cat_monsters_env_sarsa(env, q_net, device, num_episodes=500)
+    eval_results = eval_cat_monsters_env_sarsa(env, q_net, device, num_episodes=1000)
 
     print("\nSARSA n-step Evaluation Results:")
     print(f"  Average Reward: {eval_results['avg_reward']:.4f} ± {eval_results['std_reward']:.4f}")
@@ -118,7 +118,9 @@ def test_q_network():
     # Plot 3: Reward histogram
     plt.subplot(2, 2, 3)
     plt.hist(eval_results["episode_rewards"], bins=20, alpha=0.7, color="blue", edgecolor="black")
-    plt.axvline(eval_results["avg_reward"], color="red", linestyle="--", label=f"Mean: {eval_results['avg_reward']:.2f}")
+    plt.axvline(eval_results["avg_reward"], color="red", linestyle="--", linewidth=2, label=f"Mean: {eval_results['avg_reward']:.2f}")
+    plt.axvline(eval_results["avg_reward"] + eval_results["std_reward"], color="red", linestyle=":", linewidth=1.5, alpha=0.7, label=f"±1 Std: {eval_results['std_reward']:.2f}")
+    plt.axvline(eval_results["avg_reward"] - eval_results["std_reward"], color="red", linestyle=":", linewidth=1.5, alpha=0.7)
     plt.xlabel("Reward")
     plt.ylabel("Frequency")
     plt.title("Reward Distribution (SARSA n-step)")
@@ -128,7 +130,9 @@ def test_q_network():
     # Plot 4: Steps histogram
     plt.subplot(2, 2, 4)
     plt.hist(eval_results["episode_steps"], bins=20, alpha=0.7, color="green", edgecolor="black")
-    plt.axvline(eval_results["avg_steps"], color="orange", linestyle="--", label="Mean")
+    plt.axvline(eval_results["avg_steps"], color="orange", linestyle="--", linewidth=2, label=f"Mean: {eval_results['avg_steps']:.2f}")
+    plt.axvline(eval_results["avg_steps"] + eval_results["std_steps"], color="orange", linestyle=":", linewidth=1.5, alpha=0.7, label=f"±1 Std: {eval_results['std_steps']:.2f}")
+    plt.axvline(eval_results["avg_steps"] - eval_results["std_steps"], color="orange", linestyle=":", linewidth=1.5, alpha=0.7)
     plt.xlabel("Steps")
     plt.ylabel("Frequency")
     plt.title("Steps Distribution (SARSA n-step)")

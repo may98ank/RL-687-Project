@@ -4,34 +4,27 @@ import numpy as np
 class CartPoleEnv:
 
     def __init__(self, max_episode_steps=500, seed=None):
-        # ----- Physics constants -----
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
         self.total_mass = self.masscart + self.masspole
-        self.length = 0.5                     # actual pole length is 1.0 m
+        self.length = 0.5                    
         self.polemass_length = self.masspole * self.length
 
         self.force_mag = 10.0
-        self.tau = 0.02                       # seconds per timestep
+        self.tau = 0.02                       
 
-        # ----- Termination thresholds (same as classic CartPole) -----
         self.x_threshold = 2.4
         self.theta_threshold_radians = 12 * (np.pi / 180)
 
-        # ----- Episode length limit -----
         self.max_episode_steps = max_episode_steps
         self.steps_beyond_done = None
         self.step_count = 0
 
-        # ----- Seeding -----
         self.np_random = np.random.RandomState(seed)
 
         self.state = None
 
-    # --------------------------------------------------------
-    # reset()
-    # --------------------------------------------------------
     def reset(self):
         """
         Reset the environment by sampling a small random initial state.
@@ -40,10 +33,6 @@ class CartPoleEnv:
         self.step_count = 0
         self.steps_beyond_done = None
         return self.state.astype(np.float32)
-
-    # --------------------------------------------------------
-    # step(action)
-    # --------------------------------------------------------
     def step(self, action):
         
         assert action in [0, 1], "Action must be 0 (left) or 1 (right)."
