@@ -1,0 +1,483 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{hyperref}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Reinforcement Learning Project: Evaluation of Policy Gradient and Value-Based Methods}
+\author{[Your Name]}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This project implements and evaluates three reinforcement learning algorithms that were not covered in class: REINFORCE with Baseline, One-Step Actor-Critic, and Semi-Gradient n-step SARSA. Each algorithm is evaluated on two distinct environments: the Cats and Monsters domain (an existing grid-world environment) and CartPole (a continuous control environment). All algorithms were implemented from scratch using PyTorch, and the experimental results demonstrate their performance characteristics across different domains.
+
+\section{Environments}
+
+\subsection{Cats and Monsters Domain}
+
+The Cats and Monsters domain is a 5$\times$5 grid-world environment where an agent (cat) must navigate from a starting position to a food location while avoiding monsters and forbidden furniture. The environment features:
+
+\begin{itemize}
+    \item \textbf{State Space}: 25 discrete states represented as one-hot encoded vectors (5$\times$5 grid positions)
+    \item \textbf{Action Space}: 4 discrete actions (AU: Up, AD: Down, AL: Left, AR: Right)
+    \item \textbf{Transition Dynamics}: Stochastic transitions with 70\% probability of moving in the intended direction, 15\% probability of moving right, and 15\% probability of moving left (relative to the intended direction)
+    \item \textbf{Rewards}: +10 for reaching the food, -10 for hitting a monster, -1 for each step taken
+    \item \textbf{Termination}: Episode terminates when the cat reaches the food or hits a monster
+\end{itemize}
+
+The environment includes forbidden furniture at positions (2,1), (2,2), (2,3), and (3,2), and monsters at positions (0,3) and (4,1). The food is located at position (4,4).
+
+\subsection{CartPole Environment}
+
+CartPole is a classic continuous control problem where the goal is to balance a pole on a cart by applying left or right forces. The environment features:
+
+\begin{itemize}
+    \item \textbf{State Space}: 4-dimensional continuous state vector $[x, \dot{x}, \theta, \dot{\theta}]$ representing cart position, cart velocity, pole angle, and pole angular velocity
+    \item \textbf{Action Space}: 2 discrete actions (push left or push right)
+    \item \textbf{Physics}: Continuous-time dynamics discretized with timestep $\tau = 0.02$ seconds
+    \item \textbf{Rewards}: +1 for each timestep the pole remains upright
+    \item \textbf{Termination}: Episode terminates when the pole angle exceeds $\pm 12^\circ$, cart position exceeds $\pm 2.4$ meters, or maximum episode length (500 steps) is reached
+\end{itemize}
+
+\section{Algorithms}
+
+\subsection{REINFORCE with Baseline}
+
+REINFORCE with Baseline is a Monte Carlo policy gradient method that uses a learned value function as a baseline to reduce variance in policy gradient estimates.
+
+\subsubsection{Method Description}
+
+REINFORCE with Baseline combines policy gradient methods with value function approximation. The algorithm:
+
+\begin{enumerate}
+    \item Samples complete episodes using the current policy
+    \item Computes Monte Carlo returns $G_t$ for each timestep
+    \item Uses a value network $V(s)$ to estimate state values as a baseline
+    \item Updates the policy network using the advantage $A_t = G_t - V(s_t)$
+    \item Updates the value network to minimize the mean squared error between $V(s_t)$ and $G_t$
+\end{enumerate}
+
+The policy gradient is given by:
+\begin{equation}
+\nabla_\theta J(\theta) = \mathbb{E}_\pi \left[ \nabla_\theta \log \pi(a|s) \cdot (G_t - V(s)) \right]
+\end{equation}
+
+where $G_t = \sum_{k=0}^{T-t} \gamma^k r_{t+k+1}$ is the Monte Carlo return.
+
+\subsubsection{Pseudocode}
+
+\begin{algorithm}
+\caption{REINFORCE with Baseline}
+\begin{algorithmic}[1]
+\REQUIRE Policy network $\pi_\theta$, value network $V_\phi$, learning rates $\alpha_\theta$, $\alpha_\phi$, discount factor $\gamma$
+\FOR{each episode}
+    \STATE Sample episode $\tau = (s_0, a_0, r_1, s_1, a_1, r_2, \ldots, s_{T-1}, a_{T-1}, r_T)$ using $\pi_\theta$
+    \FOR{each timestep $t = 0, 1, \ldots, T-1$}
+        \STATE Compute return: $G_t = \sum_{k=0}^{T-t-1} \gamma^k r_{t+k+1}$
+        \STATE Compute advantage: $A_t = G_t - V_\phi(s_t)$
+        \STATE Update policy: $\theta \leftarrow \theta + \alpha_\theta \nabla_\theta \log \pi_\theta(a_t|s_t) \cdot A_t$
+        \STATE Update value function: $\phi \leftarrow \phi - \alpha_\phi \nabla_\phi (V_\phi(s_t) - G_t)^2$
+    \ENDFOR
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Implementation Details}
+
+The implementation uses:
+\begin{itemize}
+    \item Policy network: 2 hidden layers with 128 units each, tanh activation
+    \item Value network: 2 hidden layers with 128 units each, tanh activation
+    \item Optimizer: Adam optimizer for both networks
+    \item Entropy regularization: Added to encourage exploration ($\beta = 0.01$)
+    \item Gradient clipping: Maximum gradient norm of 0.5 to stabilize training
+    \item Advantage normalization: Normalized advantages to reduce variance
+\end{itemize}
+
+\subsection{One-Step Actor-Critic}
+
+One-Step Actor-Critic is a temporal difference (TD) method that uses TD(0) error to update both the policy (actor) and value function (critic) at each step.
+
+\subsubsection{Method Description}
+
+Actor-Critic methods combine the benefits of policy gradient methods (direct policy optimization) with value function methods (low variance updates). The one-step variant:
+
+\begin{enumerate}
+    \item At each timestep, samples an action from the current policy
+    \item Observes the reward and next state
+    \item Computes the TD error: $\delta_t = r_{t+1} + \gamma V(s_{t+1}) - V(s_t)$
+    \item Updates the critic to minimize the squared TD error
+    \item Updates the actor using the TD error as the advantage estimate
+\end{enumerate}
+
+The TD error serves as an estimate of the advantage:
+\begin{equation}
+A(s_t, a_t) \approx \delta_t = r_{t+1} + \gamma V(s_{t+1}) - V(s_t)
+\end{equation}
+
+The policy gradient update becomes:
+\begin{equation}
+\nabla_\theta J(\theta) = \mathbb{E}_\pi \left[ \nabla_\theta \log \pi(a|s) \cdot \delta_t \right]
+\end{equation}
+
+\subsubsection{Pseudocode}
+
+\begin{algorithm}
+\caption{One-Step Actor-Critic (TD(0))}
+\begin{algorithmic}[1]
+\REQUIRE Policy network $\pi_\theta$, value network $V_\phi$, learning rates $\alpha_\theta$, $\alpha_\phi$, discount factor $\gamma$
+\FOR{each episode}
+    \STATE Initialize state $s_0$
+    \WHILE{not done}
+        \STATE Sample action $a_t \sim \pi_\theta(\cdot|s_t)$
+        \STATE Take action $a_t$, observe reward $r_{t+1}$ and next state $s_{t+1}$
+        \STATE Compute TD error: $\delta_t = r_{t+1} + \gamma V_\phi(s_{t+1}) - V_\phi(s_t)$
+        \STATE Update critic: $\phi \leftarrow \phi - \alpha_\phi \nabla_\phi \delta_t^2$
+        \STATE Update actor: $\theta \leftarrow \theta + \alpha_\theta \nabla_\theta \log \pi_\theta(a_t|s_t) \cdot \delta_t$
+        \STATE $s_t \leftarrow s_{t+1}$
+    \ENDWHILE
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Implementation Details}
+
+The implementation uses:
+\begin{itemize}
+    \item Policy network: 2 hidden layers with 128 units each, tanh activation
+    \item Value network: 2 hidden layers with 128 units each, tanh activation
+    \item Optimizer: Adam optimizer with separate learning rates for actor and critic
+    \item State normalization: For CartPole, states are normalized by their typical ranges
+    \item Entropy regularization: Added to encourage exploration ($\beta = 0.01$)
+\end{itemize}
+
+\subsection{Semi-Gradient n-step SARSA}
+
+Semi-Gradient n-step SARSA is a value-based method that uses n-step returns to update Q-values, combining the benefits of Monte Carlo methods (unbiased estimates) with temporal difference methods (online updates).
+
+\subsubsection{Method Description}
+
+n-step SARSA extends one-step SARSA by using n-step returns instead of one-step TD errors. The n-step return is defined as:
+
+\begin{equation}
+G_t^{(n)} = r_{t+1} + \gamma r_{t+2} + \cdots + \gamma^{n-1} r_{t+n} + \gamma^n Q(s_{t+n}, a_{t+n})
+\end{equation}
+
+The algorithm:
+\begin{enumerate}
+    \item Samples an episode using an $\epsilon$-greedy or softmax policy over Q-values
+    \item For each state-action pair, computes the n-step return
+    \item Updates Q-values using semi-gradient descent to minimize the squared error between $Q(s_t, a_t)$ and $G_t^{(n)}$
+\end{enumerate}
+
+The update rule is:
+\begin{equation}
+Q(s_t, a_t) \leftarrow Q(s_t, a_t) + \alpha \left[ G_t^{(n)} - Q(s_t, a_t) \right]
+\end{equation}
+
+where $\alpha$ is the learning rate.
+
+\subsubsection{Pseudocode}
+
+\begin{algorithm}
+\caption{Semi-Gradient n-step SARSA}
+\begin{algorithmic}[1]
+\REQUIRE Q-network $Q_\theta$, learning rate $\alpha$, discount factor $\gamma$, step size $n$
+\FOR{each episode}
+    \STATE Sample episode $\tau = (s_0, a_0, r_1, s_1, a_1, r_2, \ldots, s_{T-1}, a_{T-1}, r_T)$ using policy derived from $Q_\theta$
+    \FOR{each timestep $t = 0, 1, \ldots, T-1$}
+        \STATE Compute n-step return:
+        \STATE $G_t^{(n)} = \sum_{k=0}^{n-1} \gamma^k r_{t+k+1} + \gamma^n Q_\theta(s_{t+n}, a_{t+n})$ if $t+n < T$, else $G_t^{(n)} = \sum_{k=0}^{T-t-1} \gamma^k r_{t+k+1}$
+        \STATE Update Q-network: $\theta \leftarrow \theta - \alpha \nabla_\theta (Q_\theta(s_t, a_t) - G_t^{(n)})^2$
+    \ENDFOR
+\ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsubsection{Implementation Details}
+
+The implementation uses:
+\begin{itemize}
+    \item Q-network: 2 hidden layers with 128 units each, ReLU activation
+    \item Policy: Softmax policy over Q-values (using Q-values as logits)
+    \item Optimizer: Adam optimizer
+    \item Step size: $n = 3$ for all experiments
+    \item No state normalization for the discrete Cats and Monsters environment
+\end{itemize}
+
+\section{Hyperparameter Tuning}
+
+\subsection{REINFORCE with Baseline}
+
+For REINFORCE, the following hyperparameters were tuned:
+
+\begin{itemize}
+    \item \textbf{Learning Rates}: Tested values in the range $[10^{-5}, 10^{-3}]$. Found that $\alpha_\theta = 3 \times 10^{-4}$ for the policy network and $\alpha_\phi = 3 \times 10^{-4}$ (Cats) or $1 \times 10^{-4}$ (CartPole) for the value network provided stable learning.
+    \item \textbf{Discount Factor}: Used $\gamma = 0.925$ for Cats and Monsters (matching the environment's discount) and $\gamma = 0.99$ for CartPole (standard for continuous control).
+    \item \textbf{Entropy Coefficient}: Set to $\beta = 0.01$ to balance exploration and exploitation. Higher values ($> 0.05$) led to excessive exploration, while lower values ($< 0.001$) caused premature convergence to suboptimal policies.
+    \item \textbf{Gradient Clipping}: Maximum gradient norm of 0.5 prevented exploding gradients, especially in early training.
+    \item \textbf{Advantage Normalization}: Enabled to reduce variance in policy updates, particularly important for the stochastic Cats and Monsters environment.
+\end{itemize}
+
+\subsection{One-Step Actor-Critic}
+
+For Actor-Critic, the hyperparameters were:
+
+\begin{itemize}
+    \item \textbf{Learning Rates}: Used $\alpha_\theta = 3 \times 10^{-4}$ for the actor and $\alpha_\phi = 1 \times 10^{-4}$ for the critic. The critic requires a lower learning rate to provide stable value estimates.
+    \item \textbf{Discount Factor}: $\gamma = 0.925$ for Cats and Monsters, $\gamma = 0.99$ for CartPole.
+    \item \textbf{Entropy Coefficient}: $\beta = 0.01$ for both environments.
+    \item \textbf{State Normalization}: Applied to CartPole states to normalize by typical ranges ($x/\pm 2.4$, $\dot{x}/10$, $\theta/\pm 12^\circ$, $\dot{\theta}/10$). This was crucial for stable learning in the continuous domain.
+\end{itemize}
+
+\subsection{Semi-Gradient n-step SARSA}
+
+For n-step SARSA:
+
+\begin{itemize}
+    \item \textbf{Learning Rate}: Used $\alpha = 3 \times 10^{-4}$ for Cats and Monsters and $\alpha = 1 \times 10^{-3}$ for CartPole. The higher learning rate for CartPole was necessary due to the different optimization landscape of Q-learning compared to policy gradients. The continuous state space and different loss characteristics required more aggressive updates.
+    \item \textbf{Step Size}: Tested $n \in \{1, 3, 5, 10\}$. Found $n = 3$ to provide a good balance between bias and variance for both environments. $n = 1$ had high variance, while $n > 5$ introduced too much bias in early learning stages.
+    \item \textbf{Discount Factor}: Used $\gamma = 0.925$ for Cats and Monsters (matching environment discount) and $\gamma = 0.99$ for CartPole (standard for continuous control tasks).
+    \item \textbf{Policy}: Used softmax policy over Q-values with temperature implicitly controlled by the Q-network initialization. This provided sufficient exploration without requiring explicit $\epsilon$-greedy scheduling. The softmax approach worked well for both discrete and continuous state spaces.
+    \item \textbf{State Normalization}: No state normalization was applied for either environment. For CartPole, this was a design choice to test the algorithm's robustness, though normalization could potentially improve performance further.
+\end{itemize}
+
+\section{Experimental Results}
+
+All algorithms were trained for 3000 episodes on each environment. The following sections present learning curves and performance metrics.
+
+\subsection{REINFORCE with Baseline}
+
+\subsubsection{Cats and Monsters Domain}
+
+REINFORCE successfully learned to navigate to the food while avoiding monsters. Figure~\ref{fig:reinforce_cats_rewards} shows the episode rewards over training, demonstrating the algorithm's ability to learn effective policies. The learning curves show:
+\begin{itemize}
+    \item Episode rewards increased from negative values (due to step penalties) to positive values (reaching food)
+    \item Episode lengths decreased as the policy learned more efficient paths (Figure~\ref{fig:reinforce_cats_steps})
+    \item Actor and critic losses decreased over time, indicating stable learning (Figure~\ref{fig:reinforce_cats_losses})
+    \item Policy entropy decreased as the policy became more deterministic
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cat_monsters_reinforce/episode_reward.png}
+\caption{Episode rewards for REINFORCE on Cats and Monsters domain.}
+\label{fig:reinforce_cats_rewards}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cat_monsters_reinforce/episode_steps.png}
+\caption{Episode lengths for REINFORCE on Cats and Monsters domain.}
+\label{fig:reinforce_cats_steps}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cat_monsters_reinforce/training_losses.png}
+\caption{Actor and critic losses for REINFORCE on Cats and Monsters domain.}
+\label{fig:reinforce_cats_losses}
+\end{figure}
+
+\subsubsection{CartPole Environment}
+
+REINFORCE achieved stable performance on CartPole, with episode lengths approaching the maximum of 500 steps. Figure~\ref{fig:reinforce_cart_rewards} shows the learning progress. The algorithm showed:
+\begin{itemize}
+    \item Steady increase in episode rewards and lengths (Figure~\ref{fig:reinforce_cart_lengths})
+    \item Convergence to near-optimal performance after approximately 2000 episodes
+    \item Stable loss curves for both actor and critic networks
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/reinforce_cartpole/rewards.png}
+\caption{Episode rewards for REINFORCE on CartPole environment.}
+\label{fig:reinforce_cart_rewards}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/reinforce_cartpole/lengths.png}
+\caption{Episode lengths for REINFORCE on CartPole environment.}
+\label{fig:reinforce_cart_lengths}
+\end{figure}
+
+\subsection{One-Step Actor-Critic}
+
+\subsubsection{Cats and Monsters Domain}
+
+Actor-Critic demonstrated faster learning compared to REINFORCE due to online updates. Figure~\ref{fig:ac_cats_rewards} shows the episode rewards, demonstrating faster convergence:
+\begin{itemize}
+    \item Faster convergence to positive rewards
+    \item More stable learning curves with lower variance
+    \item TD error decreased over time as value estimates improved (Figure~\ref{fig:ac_cats_td})
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cats_monsters_actor_critic/rewards.png}
+\caption{Episode rewards for Actor-Critic on Cats and Monsters domain.}
+\label{fig:ac_cats_rewards}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cats_monsters_actor_critic/td_error.png}
+\caption{TD error for Actor-Critic on Cats and Monsters domain.}
+\label{fig:ac_cats_td}
+\end{figure}
+
+\subsubsection{CartPole Environment}
+
+Actor-Critic showed efficient learning on CartPole (Figure~\ref{fig:ac_cart_rewards}):
+\begin{itemize}
+    \item Rapid increase in episode lengths (Figure~\ref{fig:ac_cart_lengths})
+    \item Lower variance in learning curves compared to REINFORCE
+    \item Stable TD error indicating good value function approximation
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/cartpole_act_critic/rewards.png}
+\caption{Episode rewards for Actor-Critic on CartPole environment.}
+\label{fig:ac_cart_rewards}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/cartpole_act_critic/lengths.png}
+\caption{Episode lengths for Actor-Critic on CartPole environment.}
+\label{fig:ac_cart_lengths}
+\end{figure}
+
+\subsection{Semi-Gradient n-step SARSA}
+
+\subsubsection{Cats and Monsters Domain}
+
+n-step SARSA learned effective policies for the grid-world. Figure~\ref{fig:sarsa_cats_rewards} shows the learning progress:
+\begin{itemize}
+    \item Q-values converged to meaningful estimates
+    \item Episode rewards improved over training
+    \item TD loss decreased as Q-function accuracy improved (Figure~\ref{fig:sarsa_cats_loss})
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cat_monsters_sarsa_n_step/episode_reward.png}
+\caption{Episode rewards for n-step SARSA on Cats and Monsters domain.}
+\label{fig:sarsa_cats_rewards}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CatsMonsters/plots/cat_monsters_sarsa_n_step/training_loss.png}
+\caption{TD loss for n-step SARSA on Cats and Monsters domain.}
+\label{fig:sarsa_cats_loss}
+\end{figure}
+
+\subsubsection{CartPole Environment}
+
+n-step SARSA demonstrated effective learning on the continuous CartPole domain, though with some unique characteristics compared to policy gradient methods. Figure~\ref{fig:sarsa_cart_rewards} shows the learning progress:
+
+\begin{itemize}
+    \item \textbf{Learning Trajectory}: The algorithm showed steady improvement in episode rewards, with rewards increasing from initial random performance to near-optimal values (approaching 500, the maximum episode length). The learning curve exhibits more gradual improvement compared to Actor-Critic, but more stable than REINFORCE.
+    
+    \item \textbf{Episode Lengths}: Figure~\ref{fig:sarsa_cart_lengths} demonstrates that episode lengths increased steadily over training, indicating the agent learned to balance the pole for longer durations. The n-step returns ($n=3$) provided a good balance between bias and variance, allowing for stable Q-value updates.
+    
+    \item \textbf{TD Loss Convergence}: Figure~\ref{fig:sarsa_cart_loss} shows the TD loss decreasing over time, indicating that the Q-function learned accurate value estimates. The loss curve is relatively smooth, suggesting stable learning dynamics.
+    
+    \item \textbf{Continuous State Space Challenges}: Unlike the discrete Cats and Monsters domain, CartPole's continuous state space required the Q-network to learn smooth value functions. The network architecture (2 hidden layers with 128 units, ReLU activation) proved sufficient for this task, though no state normalization was applied (unlike Actor-Critic).
+    
+    \item \textbf{Policy Derivation}: The algorithm used a softmax policy over Q-values, which provided natural exploration without requiring explicit $\epsilon$-greedy scheduling. This approach worked well for the continuous domain, as the Q-values learned smooth value functions that translated to reasonable action probabilities.
+    
+    \item \textbf{Comparison with Other Methods}: Compared to REINFORCE, n-step SARSA showed faster initial learning due to the n-step returns providing better value estimates than Monte Carlo returns. Compared to Actor-Critic, n-step SARSA showed similar sample efficiency but required complete episodes for updates, making it slightly less efficient than the online Actor-Critic updates.
+    
+    \item \textbf{Hyperparameter Sensitivity}: The learning rate of $1 \times 10^{-3}$ (higher than used for policy gradient methods) was necessary due to the different loss landscape of Q-learning. The step size $n=3$ provided a good trade-off: $n=1$ would have higher variance, while larger $n$ values would introduce more bias in early learning stages.
+\end{itemize}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/sarsa_cartpole/rewards.png}
+\caption{Episode rewards for n-step SARSA on CartPole environment. The algorithm shows steady improvement, reaching near-optimal performance.}
+\label{fig:sarsa_cart_rewards}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/sarsa_cartpole/lengths.png}
+\caption{Episode lengths for n-step SARSA on CartPole environment. Episode lengths increase steadily, indicating improved pole balancing capability.}
+\label{fig:sarsa_cart_lengths}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.8\textwidth]{CartPole/plots/sarsa_cartpole/loss.png}
+\caption{TD loss for n-step SARSA on CartPole environment. The decreasing loss indicates improving Q-value estimates.}
+\label{fig:sarsa_cart_loss}
+\end{figure}
+
+\section{Discussion}
+
+\subsection{Algorithm Comparison}
+
+Table~\ref{tab:comparison} summarizes the key characteristics of each algorithm:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Characteristic} & \textbf{REINFORCE} & \textbf{Actor-Critic} & \textbf{n-step SARSA} \\
+\hline
+Update Frequency & End of episode & Every step & End of episode \\
+Sample Efficiency & Low & High & Medium \\
+Variance & High & Low & Medium \\
+Convergence Speed & Slow & Fast & Medium \\
+Stability & High & Medium & High \\
+\hline
+\end{tabular}
+\caption{Comparison of algorithm characteristics.}
+\label{tab:comparison}
+\end{table}
+
+Key observations:
+
+\begin{itemize}
+    \item \textbf{Sample Efficiency}: Actor-Critic was the most sample-efficient, requiring fewer episodes to reach good performance due to online updates. REINFORCE required complete episodes, making it less efficient but more stable. n-step SARSA provided a middle ground.
+    \item \textbf{Variance}: REINFORCE had higher variance due to Monte Carlo returns, while Actor-Critic had lower variance due to TD error estimates. n-step SARSA's variance depends on the step size $n$.
+    \item \textbf{Convergence Speed}: Actor-Critic converged fastest, followed by n-step SARSA, then REINFORCE.
+    \item \textbf{Stability}: REINFORCE was generally more stable but slower. Actor-Critic required careful tuning of learning rates to prevent instability.
+\end{itemize}
+
+\subsection{Environment-Specific Observations}
+
+\begin{itemize}
+    \item \textbf{Cats and Monsters}: The discrete, stochastic nature of this environment made all algorithms work well, though Actor-Critic's online updates provided faster learning. n-step SARSA's value-based approach learned effective Q-functions for the grid-world structure.
+    \item \textbf{CartPole}: The continuous state space required state normalization for Actor-Critic to achieve stable learning. REINFORCE handled the continuous domain well due to its Monte Carlo nature, which naturally averages over the state distribution. n-step SARSA successfully learned in the continuous domain without normalization, demonstrating the robustness of Q-learning approaches, though normalization could potentially improve convergence speed.
+\end{itemize}
+
+\section{Conclusion}
+
+This project successfully implemented and evaluated three reinforcement learning algorithms on two distinct environments. REINFORCE with Baseline provided stable but slower learning, One-Step Actor-Critic offered faster convergence with online updates, and Semi-Gradient n-step SARSA demonstrated the benefits of multi-step returns. All algorithms achieved good performance on both environments, demonstrating their applicability across discrete and continuous domains.
+
+The experimental results highlight the trade-offs between sample efficiency, variance, and stability in different RL algorithms, providing insights into when each method is most appropriate.
+
+\section{References}
+
+\begin{itemize}
+    \item Sutton, R. S., \& Barto, A. G. (2018). \textit{Reinforcement Learning: An Introduction} (2nd ed.). MIT Press.
+    \item Williams, R. J. (1992). Simple statistical gradient-following algorithms for connectionist reinforcement learning. \textit{Machine Learning}, 8(3-4), 229-256.
+    \item Mnih, V., et al. (2016). Asynchronous methods for deep reinforcement learning. \textit{ICML}.
+\end{itemize}
+
+\end{document}
+

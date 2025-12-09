@@ -2,23 +2,6 @@ import numpy as np
 
 
 class CartPoleEnv:
-    """
-    A complete implementation of the classic control CartPole environment.
-    No Gym used — all physics and dynamics coded manually.
-
-    State = [x, x_dot, theta, theta_dot]
-        x          — cart position
-        x_dot      — cart velocity
-        theta      — pole angle (radians)
-        theta_dot  — pole angular velocity
-
-    Actions:
-        0 => push cart to the left (-force_mag)
-        1 => push cart to the right (+force_mag)
-
-    Reward:
-        +1 for every timestep the pole remains upright
-    """
 
     def __init__(self, max_episode_steps=500, seed=None):
         # ----- Physics constants -----
