@@ -6,6 +6,29 @@ from reinforce import sample_episode
 import matplotlib.pyplot as plt
 import os
 
+def sample_episode_greedy(env: CartPoleEnv, policy_net: PolicyNetwork, device: torch.device) -> dict:
+    states, actions, rewards = [], [], []
+    state = env.reset()
+    done = False
+    while not done:
+        s_tensor = torch.tensor(state, dtype=torch.float32, device=device)
+        action_logits = policy_net(s_tensor)
+        action = torch.argmax(action_logits).item()
+        next_state, reward, done, _ = env.step(action)
+        states.append(s_tensor)
+        actions.append(action)
+        rewards.append(reward)
+        state = next_state
+    
+    total_reward = sum(rewards)
+    avg_reward = np.mean(rewards) if rewards else 0.0
+    episode_stats = {
+        'total_reward': total_reward,
+        'avg_reward': avg_reward,
+        'num_steps': len(rewards)
+    }
+    return states, actions, rewards, episode_stats
+
 def eval_cartpole_env(env: CartPoleEnv, policy_net: PolicyNetwork, device: torch.device, num_episodes: int=1000) -> dict:
    
     episode_rewards = []

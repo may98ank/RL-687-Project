@@ -62,10 +62,7 @@ class CartPoleEnv:
     # step(action)
     # --------------------------------------------------------
     def step(self, action):
-        """
-        Apply physics for one timestep using Euler integration.
-        Returns (next_state, reward, done, info)
-        """
+        
         assert action in [0, 1], "Action must be 0 (left) or 1 (right)."
         x, x_dot, theta, theta_dot = self.state
 

@@ -6,13 +6,38 @@ from reinforce import sample_episode
 import matplotlib.pyplot as plt
 import os
 
+def sample_episode_greedy(env: CatMonstersEnv, policy_net: PolicyNetwork, device: torch.device) -> dict:
+    states, actions, rewards = [], [], []
+    state = env.reset()
+    done = False
+    while not done:
+        s_tensor = torch.tensor(state, dtype=torch.float32, device=device)
+        action_logits = policy_net(s_tensor)
+        # greedy action
+        action = torch.argmax(action_logits).item()
+        next_state, reward, done, _ = env.step(action)
+        states.append(s_tensor)
+        actions.append(action)
+        rewards.append(reward)
+        state = next_state
+
+    total_reward = sum(rewards)
+    avg_reward = np.mean(rewards) if rewards else 0.0
+    
+    episode_stats = {
+        'total_reward': total_reward,
+        'avg_reward': avg_reward,
+        'num_steps': len(rewards)
+    }
+    
+    return states, actions, rewards,episode_stats
 def eval_cat_monsters_env(env: CatMonstersEnv, policy_net: PolicyNetwork, device: torch.device, num_episodes: int=1000) -> dict:
    
     episode_rewards = []
     episode_steps = []
 
     for _ in range(num_episodes):
-        _, _, _, stats = sample_episode(env, policy_net, device)
+        _, _, _, stats = sample_episode_greedy(env, policy_net, device)
         episode_rewards.append(stats['total_reward'])
         episode_steps.append(stats['num_steps'])
     return {
@@ -35,7 +60,6 @@ def load_policy_and_value_networks():
 
 
 def test_policy_and_value_networks():
-    """Test loaded policy and value networks on CatMonstersEnv."""
     policy_net, value_net = load_policy_and_value_networks()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     policy_net.to(device)
