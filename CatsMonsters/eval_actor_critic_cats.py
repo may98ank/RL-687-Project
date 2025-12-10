@@ -2,7 +2,6 @@ import torch
 import numpy as np
 from models import PolicyNetwork, ValueNetwork
 from env_cat_monsters import CatMonstersEnv
-from reinforce import sample_episode
 import matplotlib.pyplot as plt
 import os
 
@@ -130,7 +129,6 @@ def test_policy_and_value_networks():
     
     plt.tight_layout()
     
-    # Save plot
     plot_path = "eval_results/eval_actor_critic/eval_results_actor_critic.png"
     plt.savefig(plot_path, dpi=150)
     print(f"\nEvaluation plot saved to: {plot_path}")

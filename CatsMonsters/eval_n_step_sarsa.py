@@ -11,10 +11,6 @@ def eval_cat_monsters_env_sarsa(env: CatMonstersEnv,
                                 q_net: QNetwork,
                                 device: torch.device,
                                 num_episodes: int = 1000) -> dict:
-    """
-    Evaluate a trained n-step SARSA Q-network.
-    Uses a greedy policy: a = argmax_a Q(s, a)
-    """
 
     episode_rewards = []
     episode_steps = []
@@ -54,12 +50,6 @@ def eval_cat_monsters_env_sarsa(env: CatMonstersEnv,
 
 
 def load_q_network():
-    """
-    Load trained SARSA n-step Q-network.
-    Assumes checkpoint is stored in: checkpoints/cats_sarsa_n/q_net.pth
-    Modify as needed.
-    """
-
     checkpoint_dir = "checkpoints/cats_sarsa_n_step"
     q_path = os.path.join(checkpoint_dir, "q_net_cat_monsters_sarsa_n_step.pth")
 
@@ -72,8 +62,6 @@ def load_q_network():
 
 
 def test_q_network():
-    """Evaluate a trained SARSA n-step Q-network and generate plots."""
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     q_net = load_q_network()
@@ -95,7 +83,6 @@ def test_q_network():
 
     plt.figure(figsize=(12, 12))
 
-    # Plot 1: Episode rewards
     plt.subplot(2, 2, 1)
     plt.plot(eval_results["episode_rewards"], alpha=0.6, color="blue")
     plt.axhline(eval_results["avg_reward"], color="red", linestyle="--", label="Mean")
@@ -105,7 +92,6 @@ def test_q_network():
     plt.legend()
     plt.grid(True, alpha=0.3)
 
-    # Plot 2: Episode steps
     plt.subplot(2, 2, 2)
     plt.plot(eval_results["episode_steps"], alpha=0.6, color="green")
     plt.axhline(eval_results["avg_steps"], color="orange", linestyle="--", label="Mean")
@@ -115,7 +101,6 @@ def test_q_network():
     plt.legend()
     plt.grid(True, alpha=0.3)
 
-    # Plot 3: Reward histogram
     plt.subplot(2, 2, 3)
     plt.hist(eval_results["episode_rewards"], bins=20, alpha=0.7, color="blue", edgecolor="black")
     plt.axvline(eval_results["avg_reward"], color="red", linestyle="--", linewidth=2, label=f"Mean: {eval_results['avg_reward']:.2f}")
@@ -127,7 +112,6 @@ def test_q_network():
     plt.legend()
     plt.grid(True, alpha=0.3)
 
-    # Plot 4: Steps histogram
     plt.subplot(2, 2, 4)
     plt.hist(eval_results["episode_steps"], bins=20, alpha=0.7, color="green", edgecolor="black")
     plt.axvline(eval_results["avg_steps"], color="orange", linestyle="--", linewidth=2, label=f"Mean: {eval_results['avg_steps']:.2f}")

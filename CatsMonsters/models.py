@@ -1,5 +1,3 @@
-# Implementing the policy and value networks
-
 import torch 
 import torch.nn as nn 
 

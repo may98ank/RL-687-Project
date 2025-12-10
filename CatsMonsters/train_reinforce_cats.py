@@ -9,10 +9,9 @@ import os
 
 
 def reinforce_train_cat_monsters():
-    """Train REINFORCE algorithm on Cat and Monsters environment."""
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    # Environment parameters
     env = CatMonstersEnv(seed=42)
     state_dim = 25  
     action_dim = 4  
@@ -46,15 +45,12 @@ def reinforce_train_cat_monsters():
         critic_losses.append(critic_loss)
         entropies.append(entropy)
     
-    # Save the policy and value networks
     torch.save(policy_net.state_dict(), "checkpoints/cats_reinforce/policy_net_cat_monsters_reinforce.pth")
     torch.save(value_net.state_dict(), "checkpoints/cats_reinforce/value_net_cat_monsters_reinforce.pth")
     
-    # Plot learning curves
     episodes = np.arange(1, num_episodes + 1)
     window = 100
     
-    # Plot 1: Episode Reward
     plt.figure(figsize=(12, 6))
     plt.plot(episodes, episode_rewards, alpha=0.3, color='blue', label='Episode Reward')
     if len(episode_rewards) >= window:
@@ -69,7 +65,6 @@ def reinforce_train_cat_monsters():
     plt.savefig(os.path.join(plot_dir, 'episode_reward.png'), dpi=150)
     plt.close()
     
-    # Plot 2: Episode Steps
     plt.figure(figsize=(12, 6))
     plt.plot(episodes, episode_steps, alpha=0.3, color='green', label='Episode Steps')
     if len(episode_steps) >= window:
@@ -84,7 +79,6 @@ def reinforce_train_cat_monsters():
     plt.savefig(os.path.join(plot_dir, 'episode_steps.png'), dpi=150)
     plt.close()
     
-    # Plot 3: Losses
     plt.figure(figsize=(12, 6))
     plt.plot(episodes, actor_losses, alpha=0.3, color='purple', label='Actor Loss')
     plt.plot(episodes, critic_losses, alpha=0.3, color='brown', label='Critic Loss')
@@ -102,7 +96,6 @@ def reinforce_train_cat_monsters():
     plt.savefig(os.path.join(plot_dir, 'training_losses.png'), dpi=150)
     plt.close()
     
-    # Plot 4: Entropy
     plt.figure(figsize=(12, 6))
     plt.plot(episodes, entropies, alpha=0.3, color='teal', label='Policy Entropy')
     if len(entropies) >= window:
@@ -117,10 +110,8 @@ def reinforce_train_cat_monsters():
     plt.savefig(os.path.join(plot_dir, 'policy_entropy.png'), dpi=150)
     plt.close()
     
-    # Plot 5: Combined metrics
     _, axes = plt.subplots(2, 2, figsize=(15, 10))
     
-    # Reward
     axes[0, 0].plot(episodes, episode_rewards, alpha=0.2, color='blue')
     if len(episode_rewards) >= window:
         moving_avg_reward = np.convolve(episode_rewards, np.ones(window) / window, mode='valid')
@@ -130,7 +121,6 @@ def reinforce_train_cat_monsters():
     axes[0, 0].set_title('Episode Reward')
     axes[0, 0].grid(True, alpha=0.3)
     
-    # Steps
     axes[0, 1].plot(episodes, episode_steps, alpha=0.2, color='green')
     if len(episode_steps) >= window:
         moving_avg_steps = np.convolve(episode_steps, np.ones(window) / window, mode='valid')
@@ -140,7 +130,6 @@ def reinforce_train_cat_monsters():
     axes[0, 1].set_title('Episode Steps')
     axes[0, 1].grid(True, alpha=0.3)
     
-    # Losses
     axes[1, 0].plot(episodes, actor_losses, alpha=0.2, color='purple', label='Actor')
     axes[1, 0].plot(episodes, critic_losses, alpha=0.2, color='brown', label='Critic')
     if len(actor_losses) >= window:
@@ -154,7 +143,6 @@ def reinforce_train_cat_monsters():
     axes[1, 0].legend()
     axes[1, 0].grid(True, alpha=0.3)
     
-    # Entropy
     axes[1, 1].plot(episodes, entropies, alpha=0.2, color='teal')
     if len(entropies) >= window:
         moving_avg_entropy = np.convolve(entropies, np.ones(window) / window, mode='valid')

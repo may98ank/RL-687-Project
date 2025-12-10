@@ -5,13 +5,7 @@ class CatMonstersEnv:
 
     
     def __init__(self, discount_factor=0.925, seed=None):
-        """
-        Initialize the Cat and Monsters environment.
-        
-        Args:
-            discount_factor: Discount factor for rewards
-            seed: Random seed for reproducibility
-        """
+
         self.states = [(r, c) for r in range(5) for c in range(5)]
         self.actions = ['AU', 'AD', 'AL', 'AR']
         self.action_to_idx = {action: idx for idx, action in enumerate(self.actions)}
@@ -26,11 +20,9 @@ class CatMonstersEnv:
         self.state_dim = 25  # 5x5 grid, one-hot encoded
         self.action_dim = 4  # 4 actions
         
-        # Current state
         self.current_state = None
         self.t = 0
         
-        # Set random seed
         if seed is not None:
             random.seed(seed)
             np.random.seed(seed)
@@ -112,7 +104,6 @@ class CatMonstersEnv:
         return probabilities
     
     def _get_reward(self, state, action, next_state):
-        """Get the reward for a given state, action, and next state."""
         if state == self.food:
             return 0.0
         elif next_state == self.food:
@@ -122,18 +113,13 @@ class CatMonstersEnv:
         return -0.05
     
     def _get_next_state(self, state, action):
-        """
-        Sample the next state given current state and action.
-        Returns the next state (actual state or 'terminal' if food is reached).
-        """
-        # Handle terminal state: if current state is food, episode ends
+
+        #if current state is food, episode ends
         if state == self.food:
             return 'terminal'
         
-        # Get all possible next states and their probabilities
         possible_states = self._get_all_possible_next_states(state, action)
         
-        # Sample based on probabilities
         states = list(possible_states.keys())
         probabilities = list(possible_states.values())
         next_state = random.choices(states, weights=probabilities, k=1)[0]
@@ -207,16 +193,15 @@ class CatMonstersEnv:
         grid = [['.' for _ in range(5)] for _ in range(5)]
         
         # Mark special cells
-        grid[4][4] = 'F'  # Food
-        grid[0][3] = 'M'  # Monster
-        grid[4][1] = 'M'  # Monster
+        grid[4][4] = 'F' 
+        grid[0][3] = 'M'  
+        grid[4][1] = 'M'  
         for r, c in self.forbidden_furniture:
-            grid[r][c] = 'X'  # Forbidden
+            grid[r][c] = 'X'  
         
-        # Mark current position
         if self.current_state is not None:
             r, c = self.current_state
-            grid[r][c] = 'C'  # Cat
+            grid[r][c] = 'C'  
         
         print("\nGrid:")
         for row in grid:
@@ -224,7 +209,6 @@ class CatMonstersEnv:
         print()
 
 
-# Test the environment
 if __name__ == "__main__":
     env = CatMonstersEnv(seed=42)
     
